@@ -22,7 +22,7 @@ Its core feature is an **interactive canvas** allowing real-time visualization a
 
 ## Screenshots
 
-`![Simulator Screenshot](Screenshot.png)`
+![Simulator Screenshot](Screenshot.png)
 
 ---
 
