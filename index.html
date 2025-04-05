@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Gaussian Beam Simulator</title>
+    <!-- === FAVICON ADDED HERE === -->
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- === END FAVICON === -->
+    <link rel="stylesheet" href="style.css">
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+</head>
+<body>
+
+    <!-- === HEADER START === -->
+    <header>
+        <div class="header-container">
+            <div class="header-left">
+                <a href="" target="_blank">
+                    <img src="logo.png" alt="Physicify SimuLab Logo" class="header-logo">
+                    <span>Physicify SimuLab</span>
+                </a>
+            </div>
+            <div class="header-right">
+                <div>Click <a href="https://github.com/physicify-simulab/Gaussianbeam" target="_blank">here</a> to view the source code on Github</div>
+                <div>Original author: <a href="https://github.com/Hussein-Tofaili" target="_blank">Hussein-Tofaili</a></div>
+                <div>Other contributors:
+                     <a href="" target="_blank">none</a>,
+                     <a href="" target="_blank">none</a>
+                     <!-- Add more contributors as needed -->
+                </div>
+            </div>
+        </div>
+    </header>
+    <!-- === HEADER END === -->
+
+
+    <h1>Gaussian Beam Simulator</h1>
+
+    <!-- Main container for the two-column layout -->
+    <div class="main-content">
+
+        <!-- Left Column -->
+        <div class="left-column">
+
+            <!-- Add Optical Element Section -->
+            <div class="add-element">
+                <h2>Add Optical Element</h2>
+                <select id="elementType">
+                    <option value="lens">Lens</option>
+                    <option value="mirror_spherical">Spherical Mirror</option>
+                    <option value="mirror_flat">Flat Mirror</option>
+                    <option value="slab_dielectric">Dielectric Slab</option>
+                    <option value="abcd_generic">Generic ABCD</option>
+                </select>
+                <label for="elementPosition">Position (mm):</label>
+                <input type="number" id="elementPosition" value="100" step="1">
+
+                <!-- Property Inputs Container -->
+                <div id="propertyInputsContainer">
+                    <!-- Lens -->
+                    <div class="property-group" id="props-lens">
+                        <label for="prop-f">Focal Length (mm):</label>
+                        <input type="number" id="prop-f" value="100" step="1">
+                    </div>
+                    <!-- Spherical Mirror -->
+                    <div class="property-group" id="props-mirror_spherical" style="display: none;">
+                        <label for="prop-r">Radius of Curvature (R) (mm):</label>
+                        <input type="number" id="prop-r" value="200" step="1">
+                        <span class="info">(R > 0 concave, R < 0 convex)</span>
+                    </div>
+                     <!-- Flat Mirror -->
+                     <div class="property-group" id="props-mirror_flat" style="display: none;">
+                        <span class="info">(No properties needed)</span>
+                     </div>
+                    <!-- Dielectric Slab -->
+                    <div class="property-group" id="props-slab_dielectric" style="display: none;">
+                        <label for="prop-nratio">Index Ratio (n₂/n₁):</label>
+                        <input type="number" id="prop-nratio" value="1.5" step="0.01" min="0.01">
+                        <label for="prop-width-slab">Width (mm):</label>
+                        <input type="number" id="prop-width-slab" value="10" step="0.1" min="0">
+                    </div>
+                    <!-- Generic ABCD -->
+                    <div class="property-group" id="props-abcd_generic" style="display: none;">
+                        <label for="prop-A">A:</label>
+                        <input type="number" id="prop-A" value="1" step="0.1">
+                        <label for="prop-B">B (mm):</label>
+                        <input type="number" id="prop-B" value="0" step="1">
+                        <label for="prop-C">C (/mm):</label>
+                        <input type="number" id="prop-C" value="0" step="0.001">
+                        <label for="prop-D">D:</label>
+                        <input type="number" id="prop-D" value="1" step="0.1">
+                    </div>
+                </div>
+                <button id="addElementBtn">Add Element</button>
+            </div>
+
+            <!-- Optical System Table Section -->
+            <div class="elements-table">
+                <h2>Optical System</h2>
+                <table id="opticsTable">
+                    <thead>
+                        <tr>
+                            <th>Optic</th>
+                            <th>Position (mm)</th>
+                            <th>Relative<br> Position (mm)</th>
+                            <th>Properties</th>
+                            <th>Waist <br> Radius (µm)</th>
+                            <th>Waist <br>Position (mm)</th>
+                            <th>Rayleigh<br> Range (mm)</th>
+                            <th>Divergence (mrad)</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="opticsTableBody">
+                        <!-- Rows will be added dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+        </div> <!-- End Left Column -->
+
+        <!-- Right Column -->
+        <div class="right-column">
+
+            <!-- Plots Section -->
+            <div class="plots">
+                <h2>Beam Propagation</h2>
+                 <div>
+                    <label><input type="checkbox" id="showElementsCheck" checked> Show Element Positions (Plotly)</label>
+                    <label><input type="checkbox" id="showWaistsCheck" checked> Show Waist Positions (Plotly)</label>
+                </div>
+
+                <h3>Interactive View (Drag Elements)</h3>
+                <canvas id="interactiveCanvas" width="1000" height="250"></canvas> <!-- Adjusted default height -->
+
+                <!-- Plotly Waist Plot -->
+                <div class="plotly-container">
+                    <div class="plotly-header">
+                         <h3>Beam Radius (w) vs Position (z)</h3>
+                         <button id="exportWBtn" class="export-button">Export W Data (CSV)</button>
+                    </div>
+                    <div id="plotW"></div>
+                </div>
+
+                 <!-- Plotly RoC Plot -->
+                 <div class="plotly-container">
+                     <div class="plotly-header">
+                         <h3>Radius of Curvature (R) vs Position (z)</h3>
+                         <button id="exportRBtn" class="export-button">Export R Data (CSV)</button>
+                    </div>
+                    <div id="plotR"></div>
+                </div>
+            </div>
+
+        </div> <!-- End Right Column -->
+
+    </div> <!-- End Main Content -->
+
+    <!-- === FOOTER START === -->
+    <footer>
+        <div class="footer-container">
+             © 2025 <a href="mailto:physicifycontact@gmail.com">Physicify SimuLab</a>
+        </div>
+    </footer>
+    <!-- === FOOTER END === -->
+
+
+    <script src="script.js"></script>
+    <script src="interactiveCanvas.js"></script>
+</body>
+</html>
