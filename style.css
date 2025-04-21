@@ -1,9 +1,10 @@
 /* --- START OF FILE style.css --- */
 /*
    Enhanced to incorporate boxes, borders, better spacing, and some color accents.
-   New or modified rules are marked with the comment "/* NEW CHANGES 
+   New or modified rules are marked with the comment "/* NEW CHANGES
    Further changes to move header info into H1 marked with "/* H1 INFO MOVE "
    Restructuring H1 info layout marked with "/* H1 INFO LAYOUT "
+   Moved Copyright notice marked with "/* COPYRIGHT MOVE "
 */
 
 /* --- General Body/Layout Styles (Existing) --- */
@@ -32,8 +33,36 @@ h1 {
     /* H1 INFO LAYOUT - Align items top */
     align-items: flex-start;
     flex-wrap: wrap; /* Allow info to wrap on smaller screens */
-    gap: 10px; /* Add gap between title and info */
+    gap: 10px; /* Add gap between title/copyright group and info */
 }
+
+/* COPYRIGHT MOVE - Wrapper for title and copyright */
+.h1-title-group {
+    flex-shrink: 0; /* Prevent shrinking when space is tight */
+}
+
+/* COPYRIGHT MOVE - Style for the main title */
+.h1-title {
+     display: block; /* Ensure it takes its own line if needed */
+}
+
+/* COPYRIGHT MOVE - Style for copyright below title */
+.h1-copyright {
+    font-size: 0.8rem; /* Smaller font size */
+    color: #555;      /* Slightly muted color */
+    margin-top: 2px;   /* Small space below title */
+    line-height: 1.2;
+    font-weight: normal; /* Ensure it's not bold if h1 is */
+}
+.h1-copyright a {
+    color: inherit; /* Inherit the grey color */
+    text-decoration: none;
+}
+.h1-copyright a:hover {
+    text-decoration: underline;
+    color: #0056b3; /* Optional: Link color on hover */
+}
+
 
 /* H1 INFO MOVE - Style the container for the info */
 /* H1 INFO LAYOUT - Arrange info items horizontally */
@@ -72,6 +101,9 @@ h1 {
 .info-content {
     font-size: 0.95em; /* Adjust content font size if needed */
 }
+
+/* REMOVED - Style for copyright text no longer needed here */
+/* .info-item-copyright .info-content { ... } */
 
 /* H1 INFO LAYOUT - Style the links within the info block */
 .h1-info a {
@@ -568,7 +600,14 @@ td[data-id="initial"] br {
     h1 {
         margin: 0 5px 5px 5px;
         font-size: 1.4em;
+        /* COPYRIGHT MOVE: Adjust H1 gap when wrapping */
+        gap: 5px;
     }
+    /* COPYRIGHT MOVE: Let title group take width when wrapping */
+    .h1-title-group {
+         flex-basis: 100%; /* Allow title/copyright group to wrap */
+    }
+
     /* Stack info items vertically */
     .h1-info {
         font-size: 0.7em;
@@ -577,6 +616,7 @@ td[data-id="initial"] br {
         gap: 5px; /* Reduce gap for vertical stack */
         text-align: left; /* Align text left */
         width: 100%; /* Ensure it takes width */
+        margin-top: 0; /* Reduce space when info block wraps */
     }
     .info-item {
        flex-direction: row; /* Put label and content side-by-side */
@@ -593,6 +633,8 @@ td[data-id="initial"] br {
         text-transform: none; /* Optional: remove uppercase */
         letter-spacing: 0; /* Optional: remove spacing */
     }
+    /* REMOVED: No longer needed as copyright isn't an info item */
+    /* .info-item-copyright .info-label { ... } */
     .info-content {
        text-align: left;
     }
