@@ -1,145 +1,132 @@
 /* --- START OF FILE style.css --- */
 /*
-   Enhanced to incorporate boxes, borders, better spacing, and some color accents.
-   New or modified rules are marked with the comment "/* NEW CHANGES
-   Further changes to move header info into H1 marked with "/* H1 INFO MOVE "
-   Restructuring H1 info layout marked with "/* H1 INFO LAYOUT "
-   Moved Copyright notice marked with "/* COPYRIGHT MOVE "
+   Contains styles for layout, elements, table, plots, canvas,
+   and responsive media queries for the Gaussian Beam Simulator.
 */
 
-/* --- General Body/Layout Styles (Existing) --- */
+/* --- General Body/Layout Styles --- */
 body {
     font-family: sans-serif;
     line-height: 1.45;
     margin: 0;
     background-color: #f4f4f4;
     font-size: 15px;
-    overflow-x: hidden; /* Keep this, might be useful generally */
+    overflow-x: hidden; /* Prevent horizontal scroll on body */
 }
 
+/* --- Enhanced H1 Header --- */
 h1 {
     color: #333;
     border-bottom: 1px solid #ccc;
     padding-bottom: 3px;
     margin: 0 15px 10px 15px;
     font-size: 1.7em;
-    /* NEW CHANGES */
     background-color: #eaeff4; /* Light accent background for h1 */
     padding: 8px 15px;
     border-radius: 4px;
-    /* H1 INFO MOVE - Flexbox for layout */
-    display: flex;
-    justify-content: space-between;
-    /* H1 INFO LAYOUT - Align items top */
-    align-items: flex-start;
-    flex-wrap: wrap; /* Allow info to wrap on smaller screens */
+    display: flex; /* Use flexbox for layout */
+    justify-content: space-between; /* Space title and info */
+    align-items: flex-start; /* Align items to the top */
+    flex-wrap: wrap; /* Allow info block to wrap */
     gap: 10px; /* Add gap between title/copyright group and info */
 }
 
-/* COPYRIGHT MOVE - Wrapper for title and copyright */
+/* Wrapper for title and copyright notice */
 .h1-title-group {
-    flex-shrink: 0; /* Prevent shrinking when space is tight */
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
-/* COPYRIGHT MOVE - Style for the main title */
+/* Main title text */
 .h1-title {
-     display: block; /* Ensure it takes its own line if needed */
+     display: block;
 }
 
-/* COPYRIGHT MOVE - Style for copyright below title */
+/* Copyright notice below the title */
 .h1-copyright {
-    font-size: 0.8rem; /* Smaller font size */
-    color: #555;      /* Slightly muted color */
-    margin-top: 2px;   /* Small space below title */
+    font-size: 0.8rem;
+    color: #555;
+    margin-top: 2px;
     line-height: 1.2;
-    font-weight: normal; /* Ensure it's not bold if h1 is */
+    font-weight: normal;
 }
 .h1-copyright a {
-    color: inherit; /* Inherit the grey color */
+    color: inherit;
     text-decoration: none;
 }
 .h1-copyright a:hover {
     text-decoration: underline;
-    color: #0056b3; /* Optional: Link color on hover */
+    color: #0056b3;
 }
 
-
-/* H1 INFO MOVE - Style the container for the info */
-/* H1 INFO LAYOUT - Arrange info items horizontally */
+/* Container for info items (Source, Author, etc.) */
 .h1-info {
-    display: flex; /* Arrange items horizontally */
+    display: flex;
     gap: 20px; /* Space between info items */
     font-size: 0.6em; /* Relative to h1 font size */
     line-height: 1.3;
-    text-align: center; /* Center text within items */
+    text-align: center;
     color: #343a40;
     margin-left: auto; /* Push to the right */
-    flex-shrink: 0; /* Prevent shrinking */
-    align-items: flex-start; /* Align items to the top */
+    flex-shrink: 0;
+    align-items: flex-start;
 }
 
-/* H1 INFO LAYOUT - Style for each info block */
+/* Individual info block (label + content) */
 .info-item {
     display: flex;
-    flex-direction: column; /* Stack label above content */
-    align-items: center; /* Center label and content */
-    min-width: 80px; /* Give items some minimum width */
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
 }
 
-/* H1 INFO LAYOUT - Style for the labels */
+/* Label within an info block */
 .info-label {
-    font-size: 0.8em; /* Smaller font for label */
+    font-size: 0.8em;
     font-weight: bold;
     color: #555;
     margin-bottom: 3px;
-    white-space: nowrap; /* Prevent label wrapping */
-    text-transform: uppercase; /* Optional: Make labels uppercase */
-    letter-spacing: 0.5px; /* Optional: Add letter spacing */
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-/* H1 INFO LAYOUT - Style for the content below label */
+/* Content area within an info block */
 .info-content {
-    font-size: 0.95em; /* Adjust content font size if needed */
+    font-size: 0.95em;
 }
 
-/* REMOVED - Style for copyright text no longer needed here */
-/* .info-item-copyright .info-content { ... } */
-
-/* H1 INFO LAYOUT - Style the links within the info block */
+/* Links within the info block */
 .h1-info a {
     color: #0056b3;
     text-decoration: none;
-    display: inline-block; /* Needed for icon centering */
-    vertical-align: middle; /* Added for better icon alignment */
+    display: inline-block;
+    vertical-align: middle;
 }
 .h1-info a:hover {
     text-decoration: underline;
     color: #003d80;
 }
 
-/* H1 INFO LAYOUT - General style for icons within info links */
-/* UPDATED: Made more general */
-.h1-info a i { /* Target any <i> tag within the link */
-    font-size: 1.8em; /* Default size */
+/* General style for icons within info links */
+.h1-info a i {
+    font-size: 1.8em;
     line-height: 1;
-    color: #000; /* Default icon color (e.g., blue) */
-    vertical-align: middle; /* Helps alignment */
-    transition: color 0.2s ease; /* Smooth hover effect */
+    color: #000; /* Default icon color */
+    vertical-align: middle;
+    transition: color 0.2s ease;
 }
 .h1-info a:hover i {
      color: #0056b3; /* Default hover color */
 }
 
-/* H1 INFO LAYOUT - Specific override for GitHub icon */
-/* UPDATED: Only override color now */
+/* Specific override for GitHub icon */
 .h1-info a .fab.fa-github {
     color: #24292e; /* GitHub-like color */
 }
 .h1-info a:hover .fab.fa-github {
     color: #000; /* Darken GitHub icon on hover */
 }
-
-/* ADDED: Specific hover for the invoice icon (optional, can use default) */
+/* Specific hover for the invoice icon */
 .h1-info a:hover .fa-solid.fa-file-invoice {
     color: #000; /* Darken blue on hover */
 }
@@ -150,25 +137,22 @@ h1 {
     display: flex;
     gap: 15px;
     padding: 0 15px;
-    align-items: flex-start;
-    max-width: 1800px;
-    margin: 0 auto;
-    /* NEW CHANGES */
+    align-items: flex-start; /* Align tops of columns */
+    max-width: 1800px; /* Max width for very large screens */
+    margin: 0 auto; /* Center the content */
     border-radius: 4px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    background-color: #fff;
+    background-color: #fff; /* Background for the main area */
 }
 .left-column {
-    flex: 1;
-    min-width: 0;
-    /* NEW CHANGES */
-    padding: 15px 0;
+    flex: 1; /* Take up half the space */
+    min-width: 0; /* Prevent flex item overflow */
+    padding: 15px 0; /* Padding inside column */
 }
 .right-column {
-    flex: 1;
-    min-width: 0;
-    /* NEW CHANGES */
-    padding: 15px 0;
+    flex: 1; /* Take up half the space */
+    min-width: 0; /* Prevent flex item overflow */
+    padding: 15px 0; /* Padding inside column */
 }
 
 /* --- Section Headers --- */
@@ -179,8 +163,7 @@ h2 {
     margin-top: 0;
     margin-bottom: 8px;
     font-size: 1.5em;
-    /* NEW CHANGES */
-    background-color: #eaeff4;
+    background-color: #eaeff4; /* Accent background */
     padding: 6px 10px;
     border-radius: 4px;
 }
@@ -188,7 +171,6 @@ h3 {
     font-size: 1.2em;
     margin-bottom: 5px;
     margin-top: 10px;
-    /* NEW CHANGES */
     color: #444;
     padding: 4px 0;
 }
@@ -196,42 +178,38 @@ h3 {
 /* --- Add Element Section --- */
 .add-element {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: wrap; /* Allow items to wrap */
     align-items: center;
-    gap: 8px;
+    gap: 8px; /* Spacing between controls */
     margin-bottom: 18px;
-    /* NEW CHANGES */
-    background-color: #ffffff;
+    background-color: #ffffff; /* White background box */
     padding: 10px;
     border-radius: 4px;
     border: 1px solid #ddd;
 }
-.add-element h2 { /* Style retained as it's a general H2 style */
-    width: 100%;
-    flex-basis: 100%;
-    margin-bottom: 8px;
-    color: #333;
-    border-bottom: 1px solid #ccc;
-    padding-bottom: 3px;
-    margin-top: 0;
-    font-size: 1.5em;
+.add-element h2 { /* H2 inside this section */
+    width: 100%; /* Take full width */
+    flex-basis: 100%; /* Ensure it's on its own line */
+    margin-bottom: 8px; /* Space below heading */
+    /* Inherit general H2 styles */
 }
 .add-element > * {
-    margin-bottom: 0;
+    margin-bottom: 0; /* Reset default margins */
     margin-right: 0;
 }
 .add-element label {
     margin-right: 4px;
     font-size: 0.95em;
+    white-space: nowrap;
 }
 #propertyInputsContainer {
-    display: contents;
+    display: contents; /* Allow property groups to participate in flex layout */
 }
 .property-group {
-    display: inline-flex;
+    display: inline-flex; /* Align items inside horizontally */
     align-items: center;
     flex-wrap: nowrap;
-    border-left: 1px solid #eee;
+    border-left: 1px solid #eee; /* Separator line */
     padding-left: 8px;
     gap: 4px;
 }
@@ -240,7 +218,7 @@ h3 {
 }
 .property-group input[type="number"] {
     width: 70px;
-    max-width: 70px;
+    max-width: 70px; /* Limit width */
     margin-right: 0;
     font-size: 0.95em;
     padding: 3px 4px;
@@ -249,6 +227,7 @@ h3 {
     font-size: 0.85em;
     margin-left: 3px;
     white-space: nowrap;
+    color: #666;
 }
 input[type="number"], select {
     padding: 3px 4px;
@@ -259,9 +238,9 @@ input[type="number"], select {
     font-size: 0.95em;
     box-sizing: border-box;
 }
-button {
+button { /* General button style, used by "Add Element" */
     padding: 5px 10px;
-    background-color: #5cb85c;
+    background-color: #5cb85c; /* Green */
     color: white;
     border: none;
     border-radius: 3px;
@@ -278,40 +257,106 @@ button:hover {
 .elements-table {
     margin-top: 0;
     margin-bottom: 12px;
-    overflow-x: auto;
 }
+
+/* Style for the header containing h2 and Export/Import buttons */
+.table-header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 5px;
+    background-color: #eaeff4; /* Match H2 background */
+    padding: 6px 10px;
+    border-radius: 4px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Adjust h2 margin/padding within the new container */
+.table-header-controls h2 {
+    margin: 0;
+    padding: 0;
+    border-bottom: none;
+    background-color: transparent;
+    flex-grow: 1; /* Allow h2 to take available space */
+}
+
+/* Container for the Export/Import buttons */
+.table-buttons {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* General style for control buttons (Export/Import Setup) */
+.control-button {
+    padding: 4px 9px;
+    font-size: 0.9em;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: white;
+    white-space: nowrap;
+}
+.control-button i {
+    font-size: 1em;
+    line-height: 1;
+}
+
+/* Specific colors for Export/Import buttons */
+#exportSetupBtn {
+    background-color: #337ab7; /* Blue */
+}
+#exportSetupBtn:hover {
+    background-color: #286090;
+}
+#importSetupBtn {
+    background-color: #5bc0de; /* Cyan */
+}
+#importSetupBtn:hover {
+    background-color: #31b0d5;
+}
+
+/* Table itself */
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 5px;
     background-color: #fff;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     font-size: 0.9em;
-    /* NEW CHANGES */
     border: 1px solid #ccc;
+    overflow-x: auto; /* Add horizontal scroll to table if needed */
+    display: block; /* Required for overflow-x on table */
 }
 th, td {
     border: 1px solid #ddd;
     padding: 3px 5px;
     text-align: left;
     vertical-align: middle;
-    white-space: nowrap;
+    white-space: nowrap; /* Prevent wrapping by default */
 }
-td[data-id="initial"], td:nth-child(4) {
+/* Allow wrapping in properties cell and initial beam cell */
+td[data-id="initial"],
+#opticsTableBody td:nth-child(4) { /* 4th column is Properties */
     white-space: normal;
 }
 th {
-    background-color: #f0f0f0;
+    background-color: #f0f0f0; /* Light grey header */
     font-weight: bold;
     font-size: 0.95em;
     padding: 4px 5px;
 }
+/* Inputs within table cells */
 td input[type="number"] {
     width: 60px;
     max-width: 60px;
     margin: 0 1px;
     padding: 2px 3px;
-    font-size: 1em;
+    font-size: 1em; /* Match cell font size */
     box-sizing: border-box;
     border-radius: 2px;
     border: 1px solid #ccc;
@@ -320,24 +365,27 @@ td input.rel-pos-input {
     width: 60px;
     max-width: 60px;
 }
+/* Specific width adjustments for initial beam params */
 td[data-id="initial"] input[type="number"]:not([data-property='w0_um']) {
     width: 55px;
     max-width: 55px;
 }
-td[data-id="initial"] br {
+td[data-id="initial"] br { /* Style line breaks in initial beam cell */
     display: block;
     content: "";
     margin-top: 2px;
     margin-bottom: 0;
 }
+/* Remove button style */
 .remove-btn {
-    background-color: #d9534f;
+    background-color: #d9534f; /* Red */
     color: white;
     padding: 2px 6px;
     font-size: 0.85em;
     border-radius: 2px;
     border: none;
     margin: 0;
+    cursor: pointer;
 }
 .remove-btn:hover {
     background-color: #c9302c;
@@ -347,6 +395,7 @@ td[data-id="initial"] br {
 .plots {
     margin-top: 0;
 }
+/* Container for plot options checkboxes */
 .plots > div:first-of-type {
     margin-bottom: 6px;
 }
@@ -365,27 +414,16 @@ td[data-id="initial"] br {
     border: 1px solid #bbb;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     cursor: default;
-    max-width: 100%;
-    height: auto;
-    aspect-ratio: 2.5 / 1;
+    max-width: 100%; /* Ensure it fits container */
+    height: auto; /* Maintain aspect ratio */
+    /* Reverted aspect-ratio */
+    aspect-ratio: 2.5 / 1; /* Original aspect ratio */
     min-height: 120px;
 }
 .draggable { cursor: grab; }
 .dragging { cursor: grabbing; }
 
 /* --- Plotly Plots Adjustments --- */
-#plotW, #plotR {
-    width: 100%;
-    min-height: 180px;
-    height: auto;
-    aspect-ratio: 2.8 / 1;
-    background-color: #fff;
-    box-shadow: 0 1px 1px rgba(0,0,0,0.08);
-    margin-top: 0;
-    /* NEW CHANGES */
-    border: 1px solid #ccc;
-    border-radius: 4px;
-}
 .plotly-container {
     margin-bottom: 10px;
 }
@@ -396,60 +434,72 @@ td[data-id="initial"] br {
     flex-wrap: wrap;
     gap: 6px;
     margin-bottom: 2px;
-    min-height: 20px;
+    min-height: 20px; /* Ensure header has some height */
 }
 .plotly-header h3 {
     margin: 0;
     border-bottom: none;
-    flex-grow: 1;
+    flex-grow: 1; /* Allow title to take space */
     font-size: 1.05em;
     line-height: 1.2;
 }
-.export-button {
+.export-button { /* Style for Export W/R Data buttons */
     padding: 3px 8px;
     font-size: 0.85em;
-    background-color: #f0ad4e;
+    background-color: #f0ad4e; /* Orange */
     color: white;
     border: none;
     border-radius: 2px;
     cursor: pointer;
     line-height: 1.2;
+    white-space: nowrap;
 }
 .export-button:hover {
     background-color: #ec971f;
 }
+/* Plotly divs */
+#plotW, #plotR {
+    width: 100%;
+    min-height: 180px;
+    height: auto; /* Maintain aspect ratio */
+    aspect-ratio: 2.8 / 1;
+    background-color: #fff;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+    margin-top: 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
 
 
-/* --- Media Queries (General Adjustments) --- */
+/* --- Media Queries (Responsive Adjustments) --- */
 
-/* STACK COLUMNS */
+/* Medium screens / Small Laptops - Stack Columns */
 @media (max-width: 1500px) {
     .main-content {
-        display: block;
+        display: block; /* Stack columns */
         padding: 0 10px;
     }
     .left-column, .right-column {
-        flex: none;
-        width: 100%;
+        flex: none; /* Disable flex sizing */
+        width: 100%; /* Full width */
     }
     .left-column {
-        margin-bottom: 20px;
+        margin-bottom: 20px; /* Space between stacked columns */
     }
     body {
         font-size: 14px;
-        overflow-x: auto; /* Re-apply here if needed */
+        overflow-x: auto; /* Allow horizontal scroll if needed */
     }
     h1 {
         margin: 0 10px 8px 10px;
         font-size: 1.6em;
     }
-    /* Adjust info font size */
     .h1-info {
         font-size: 0.6em;
-        gap: 15px; /* Reduce gap slightly */
+        gap: 15px;
     }
     .info-item {
-        min-width: 70px; /* Reduce min-width */
+        min-width: 70px;
     }
     h2 {
         font-size: 1.4em;
@@ -457,10 +507,9 @@ td[data-id="initial"] br {
     h3 {
         font-size: 1.15em;
     }
-
     #interactiveCanvas {
         min-height: 110px;
-        aspect-ratio: 4 / 1;
+        /* aspect-ratio: 4.5 / 1; /* REMOVED OVERRIDE */
     }
     #plotW, #plotR {
         min-height: 160px;
@@ -481,9 +530,21 @@ td[data-id="initial"] br {
         width: 52px;
         max-width: 52px;
     }
+    .table-header-controls {
+        padding: 5px 8px;
+        gap: 8px;
+    }
+    .control-button {
+        padding: 3px 7px;
+        font-size: 0.85em;
+        gap: 4px;
+    }
+    table {
+        font-size: 0.85em;
+    }
 }
 
-/* Further Compaction (stacked) */
+/* Tablets - Further Compaction */
 @media (max-width: 768px) {
     body {
         margin: 0;
@@ -495,7 +556,6 @@ td[data-id="initial"] br {
     h1 {
         margin: 0 8px 6px 8px;
         font-size: 1.5em;
-        /* align-items: flex-start; Already set */
     }
     /* Adjust info layout when wrapped */
     .h1-info {
@@ -503,7 +563,7 @@ td[data-id="initial"] br {
         margin-left: 0; /* Reset margin */
         flex-basis: 100%; /* Take full width when wrapped */
         margin-top: 8px; /* Add space when wrapped */
-        justify-content: space-around; /* Spread items out a bit */
+        justify-content: space-around;
         gap: 10px;
     }
      .info-item {
@@ -524,22 +584,31 @@ td[data-id="initial"] br {
     .add-element {
         gap: 5px;
         margin-bottom: 12px;
-    }
-    .add-element select,
-    .add-element input[type="number"],
-    .add-element .property-group,
-    #addElementBtn {
-        width: 100%; /* Making add element inputs full width */
+        /* Make add element inputs full width for easier tapping */
+        flex-direction: column; /* Stack controls vertically */
+        align-items: stretch; /* Stretch items full width */
     }
     #propertyInputsContainer {
+        display: flex; /* Use flex for property groups */
+        flex-direction: column;
         gap: 5px;
+        width: 100%;
     }
     .property-group {
-        gap: 3px;
-        padding-left: 5px;
+        border-left: none; /* Remove border */
+        padding-left: 0;
+        gap: 5px; /* Adjust gap */
+        width: 100%; /* Full width */
+        justify-content: space-between; /* Space out label/input */
     }
     .property-group input[type="number"]{
-        width: 75px; /* Adjusting width */
+         width: 80px; /* Adjust width */
+         max-width: 100px;
+         flex-shrink: 0; /* Prevent input shrinking too much */
+    }
+    .add-element label {
+         flex-grow: 1; /* Allow label to take space */
+         margin-right: 5px;
     }
 
     table {
@@ -562,10 +631,9 @@ td[data-id="initial"] br {
         width: 50px;
         max-width: 50px;
     }
-
     #interactiveCanvas {
         min-height: 100px;
-        aspect-ratio: 4.2 / 1;
+        /* aspect-ratio: 4.2 / 1; /* REMOVED OVERRIDE */
     }
     #plotW, #plotR {
         min-height: 150px;
@@ -585,9 +653,22 @@ td[data-id="initial"] br {
         font-size: 0.8em;
         padding: 2px 5px;
     }
+    .table-header-controls {
+         /* Stack heading and buttons */
+        flex-direction: column;
+        align-items: flex-start; /* Align items left */
+        gap: 5px;
+    }
+    .table-buttons {
+        width: 100%; /* Make buttons take full width */
+        justify-content: flex-start; /* Align buttons left */
+    }
+    .control-button {
+        font-size: 0.8em;
+    }
 }
 
-/* Extra small (stacked) */
+/* Small Phones - Maximum Compaction */
 @media (max-width: 480px) {
     body {
         margin: 0;
@@ -600,46 +681,42 @@ td[data-id="initial"] br {
     h1 {
         margin: 0 5px 5px 5px;
         font-size: 1.4em;
-        /* COPYRIGHT MOVE: Adjust H1 gap when wrapping */
         gap: 5px;
     }
-    /* COPYRIGHT MOVE: Let title group take width when wrapping */
+    /* Let title group take width when wrapping */
     .h1-title-group {
          flex-basis: 100%; /* Allow title/copyright group to wrap */
     }
-
     /* Stack info items vertically */
     .h1-info {
         font-size: 0.7em;
-        flex-direction: column; /* Stack items vertically */
-        align-items: flex-start; /* Align stacked items left */
-        gap: 5px; /* Reduce gap for vertical stack */
-        text-align: left; /* Align text left */
-        width: 100%; /* Ensure it takes width */
-        margin-top: 0; /* Reduce space when info block wraps */
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        text-align: left;
+        width: 100%;
+        margin-top: 0;
     }
     .info-item {
-       flex-direction: row; /* Put label and content side-by-side */
-       align-items: baseline; /* Align baseline */
-       gap: 6px; /* Gap between label and content */
-       min-width: 0; /* Remove min-width */
-       width: 100%; /* Take full width */
+       flex-direction: row; /* Label and content side-by-side */
+       align-items: baseline;
+       gap: 6px;
+       min-width: 0;
+       width: 100%;
     }
     .info-label {
-        margin-bottom: 0; /* Remove bottom margin */
+        margin-bottom: 0;
         text-align: left;
-        flex-shrink: 0; /* Prevent label shrinking */
+        flex-shrink: 0;
         min-width: 80px; /* Give label fixed width */
-        text-transform: none; /* Optional: remove uppercase */
-        letter-spacing: 0; /* Optional: remove spacing */
+        text-transform: none;
+        letter-spacing: 0;
     }
-    /* REMOVED: No longer needed as copyright isn't an info item */
-    /* .info-item-copyright .info-label { ... } */
     .info-content {
        text-align: left;
     }
-     .h1-info .fab.fa-github {
-        font-size: 1.5em; /* Slightly smaller icon */
+     .h1-info a i { /* Make icons smaller */
+        font-size: 1.5em;
     }
 
     h2 {
@@ -654,19 +731,16 @@ td[data-id="initial"] br {
     .left-column {
         margin-bottom: 12px;
     }
-    .add-element select,
-    .add-element input[type="number"],
-    .add-element .property-group,
-    #addElementBtn {
-        width: 100%; /* Ensure full width on smallest screens */
+    .add-element {
+        padding: 8px; /* Reduce padding */
     }
     .add-element label {
-        min-width: 50px;
+        min-width: auto; /* Remove min-width for labels */
         font-size: 0.9em;
     }
     .property-group input[type="number"] {
-        width: 80px;
-        max-width: 90px;
+        width: 70px; /* Further adjust input */
+        max-width: 80px;
     }
 
     th, td {
@@ -684,18 +758,17 @@ td[data-id="initial"] br {
         width: 48px;
         max-width: 48px;
     }
-
     #interactiveCanvas {
         min-height: 90px;
-        aspect-ratio: 4 / 1;
         margin: 4px auto;
+        /* aspect-ratio: 4 / 1; /* REMOVED OVERRIDE */
     }
     #plotW, #plotR {
         min-height: 140px;
         aspect-ratio: 2.5 / 1;
     }
     .plots > div:first-of-type label {
-        display: block;
+        display: block; /* Stack checkboxes */
         margin-bottom: 2px;
     }
     .plotly-container {

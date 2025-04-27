@@ -25,8 +25,8 @@
     let elementTypeSelect, elementPositionInput, addElementBtn,
         propertyInputsContainer, propGroups, propInputs, opticsTableBody,
         plotWDiv, plotRDiv, exportWBtn, exportRBtn, showElementsCheck,
-        showWaistsCheck, interactiveCanvasElement;
-
+        showWaistsCheck, interactiveCanvasElement,
+        exportSetupBtn, importSetupBtn, importSetupInput;
     // =========================================================================
     // === UTILITIES ===========================================================
     // =========================================================================
@@ -106,6 +106,23 @@
         if (!isFinite(value)) return value > 0 ? '"Infinity"' : '"-Infinity"';
         if (isNaN(value)) return '"NaN"';
         return value.toFixed(6);
+    }
+
+    function downloadFile(filename, content, mimeType = 'text/plain;charset=utf-8;') {
+        const blob = new Blob([content], { type: mimeType });
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } else {
+            alert("File download not supported by your browser.");
+        }
     }
 
     // =========================================================================
@@ -732,6 +749,248 @@
     }
 
     // =========================================================================
+    // === XML EXPORT/IMPORT ===================================================
+    // =========================================================================
+
+    function handleExportSetup() {
+        console.log("Exporting setup...");
+        try {
+            const xmlDoc = document.implementation.createDocument(null, "opticalSystem", null);
+            const root = xmlDoc.documentElement;
+
+            // Add Beam Parameters
+            const beamNode = xmlDoc.createElement("beamParameters");
+            for (const key in beamParams) {
+                if (Object.hasOwnProperty.call(beamParams, key)) {
+                    beamNode.setAttribute(key, beamParams[key]);
+                }
+            }
+            root.appendChild(beamNode);
+
+            // Add Elements
+            const elementsNode = xmlDoc.createElement("elements");
+            opticalElements.forEach(element => {
+                const elementNode = xmlDoc.createElement("element");
+                elementNode.setAttribute("type", element.type);
+                elementNode.setAttribute("position_mm", element.position_mm);
+                // Don't save generated ID, it will be recreated on import
+                // elementNode.setAttribute("id", element.id);
+
+                if (element.property && Object.keys(element.property).length > 0) {
+                    const propertyNode = xmlDoc.createElement("property");
+                    for (const propKey in element.property) {
+                        if (Object.hasOwnProperty.call(element.property, propKey)) {
+                             propertyNode.setAttribute(propKey, element.property[propKey]);
+                        }
+                    }
+                    elementNode.appendChild(propertyNode);
+                }
+                elementsNode.appendChild(elementNode);
+            });
+            root.appendChild(elementsNode);
+
+            const serializer = new XMLSerializer();
+            const xmlString = '<?xml version="1.0" encoding="UTF-8"?>\n' + serializer.serializeToString(xmlDoc);
+
+            downloadFile("gaussian_beam_setup.xml", xmlString, 'application/xml;charset=utf-8;');
+            console.log("Setup exported successfully.");
+
+        } catch (error) {
+            console.error("Error exporting setup:", error);
+            alert("Error exporting setup. See console for details.");
+        }
+    }
+
+    function handleImportSetupTrigger() {
+        // Trigger the hidden file input
+        if (importSetupInput) {
+            importSetupInput.click();
+        } else {
+            console.error("Import file input not found.");
+            alert("Import feature error: File input element missing.");
+        }
+    }
+
+    function handleImportSetupFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            console.log("No file selected for import.");
+            return;
+        }
+        if (!file.name.toLowerCase().endsWith('.xml')) {
+            alert("Invalid file type. Please select an XML file (.xml).");
+            event.target.value = null;
+            return;
+        }
+
+        console.log("Importing setup from:", file.name);
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const xmlString = e.target.result;
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+
+                const parserError = xmlDoc.getElementsByTagName("parsererror");
+                 if (parserError.length > 0) {
+                     console.error("XML Parsing Error:", parserError[0].textContent);
+                     throw new Error("Failed to parse XML file. Check format and validity.");
+                 }
+
+                const root = xmlDoc.documentElement;
+                if (!root || root.tagName !== 'opticalSystem') {
+                    throw new Error("Invalid XML format: Missing <opticalSystem> root element.");
+                }
+
+                // --- Parse Beam Parameters into a temporary object ---
+                const beamNode = root.querySelector("beamParameters");
+                if (!beamNode) {
+                    throw new Error("Invalid XML format: Missing <beamParameters> element.");
+                }
+                const importedBeamParams = {}; // Temporary storage
+                const expectedBeamParams = ['w0_um', 'z0_mm', 'lambda_nm', 'M2', 'n', 'plotRangeZ_mm'];
+                let missingBeamParam = null;
+                for (const key of expectedBeamParams) {
+                    const value = beamNode.getAttribute(key);
+                    if (value === null) {
+                         missingBeamParam = key;
+                         break;
+                    }
+                    const numValue = parseFloat(value);
+                    if (isNaN(numValue)) {
+                        throw new Error(`Invalid value for beam parameter '${key}': "${value}". Must be a number.`);
+                    }
+                    let clampedValue = numValue;
+                    switch (key) {
+                        case 'w0_um':     clampedValue = Math.max(0.1, numValue); break;
+                        case 'lambda_nm': clampedValue = Math.max(1, numValue); break;
+                        case 'M2':        clampedValue = Math.max(1.0, numValue); break;
+                        case 'n':         clampedValue = Math.max(1.0, numValue); break;
+                    }
+                    if (clampedValue !== numValue) console.warn(`Imported beam param ${key} value clamped from ${numValue} to ${clampedValue}`);
+                    importedBeamParams[key] = clampedValue;
+                }
+                 if (missingBeamParam) {
+                      throw new Error(`Invalid XML format: Missing required beam parameter attribute '${missingBeamParam}'.`);
+                 }
+
+                // --- Parse Elements into a temporary array ---
+                const elementsNode = root.querySelector("elements");
+                if (!elementsNode) {
+                    throw new Error("Invalid XML format: Missing <elements> element.");
+                }
+                const importedElements = []; // Temporary storage
+                const elementNodes = elementsNode.querySelectorAll("element");
+
+                elementNodes.forEach((elNode, index) => {
+                    // ... (parsing logic for each element into the 'element' object remains the same) ...
+                    const type = elNode.getAttribute("type");
+                    const posStr = elNode.getAttribute("position_mm");
+
+                    if (!type) throw new Error(`Element ${index + 1}: Missing 'type' attribute.`);
+                    if (posStr === null) throw new Error(`Element ${index + 1} (type ${type}): Missing 'position_mm' attribute.`);
+
+                    const position_mm = parseFloat(posStr);
+                    if (isNaN(position_mm)) throw new Error(`Element ${index + 1} (type ${type}): Invalid 'position_mm' value "${posStr}".`);
+
+                    const element = {
+                        type: type,
+                        position_mm: position_mm,
+                        property: {},
+                        id: Date.now().toString() + Math.random().toString(36).substring(2, 9) + `_import${index}`
+                    };
+
+                    const propNode = elNode.querySelector("property");
+                    const expectedProps = getExpectedPropertiesForType(type);
+
+                    if (expectedProps.length > 0) {
+                        if (!propNode) throw new Error(`Element ${index + 1} (type ${type}): Missing <property> tag, but properties are expected.`);
+                        expectedProps.forEach(propKey => {
+                            const propValueStr = propNode.getAttribute(propKey);
+                            if (propValueStr === null) throw new Error(`Element ${index + 1} (type ${type}): Missing property attribute '${propKey}'.`);
+                            const propValue = parseFloat(propValueStr);
+                            if (isNaN(propValue)) throw new Error(`Element ${index + 1} (type ${type}): Invalid value for property '${propKey}': "${propValueStr}".`);
+                            let clampedPropValue = propValue;
+                            switch (propKey) {
+                                case 'n_ratio':  clampedPropValue = Math.max(0.01, propValue); break;
+                                case 'width_mm': clampedPropValue = Math.max(0, propValue); break;
+                            }
+                            if (clampedPropValue !== propValue) console.warn(`Imported element ${index + 1} property ${propKey} value clamped from ${propValue} to ${clampedPropValue}`);
+                            element.property[propKey] = clampedPropValue;
+                        });
+                    } else if (propNode) {
+                         console.warn(`Element ${index + 1} (type ${type}): Found <property> tag but none are expected for this type. Ignoring properties.`);
+                    }
+                    importedElements.push(element); // Add to temporary array
+                });
+
+
+                // --- SUCCESS: Update State IN PLACE ---
+
+                // 1. Update properties of the *existing* beamParams object
+                console.log("Updating beamParams object in place...");
+                // Optional: Clear any old keys that might not be in the import
+                // for (const key in beamParams) {
+                //     if (!importedBeamParams.hasOwnProperty(key)) {
+                //         delete beamParams[key];
+                //     }
+                // }
+                // Overwrite/add properties from the import
+                for (const key in importedBeamParams) {
+                    if (Object.hasOwnProperty.call(importedBeamParams, key)) {
+                        beamParams[key] = importedBeamParams[key];
+                    }
+                }
+
+                // 2. Update contents of the *existing* opticalElements array
+                console.log("Updating opticalElements array in place...");
+                opticalElements.length = 0; // Clear the array without changing the reference
+                // Add the imported elements into the *same* array object
+                opticalElements.push(...importedElements);
+                // Alternatively, loop: importedElements.forEach(el => opticalElements.push(el));
+
+
+                console.log("Setup imported successfully (in-place update).");
+                // alert("Setup imported successfully!"); // Alert might be annoying
+
+                runSimulation(); // Re-run simulation with the updated data
+
+            } catch (error) {
+                console.error("Error importing setup:", error);
+                alert(`Error importing setup: ${error.message}\nPlease ensure the XML file is valid and has the correct structure.`);
+                 // State was not modified in place if error occurred before the update block
+            } finally {
+                // Reset file input value so the same file can be selected again
+                event.target.value = null;
+            }
+        };
+
+        reader.onerror = function(e) {
+            console.error("Error reading file:", e);
+            alert("Error reading the selected file.");
+            event.target.value = null; // Reset input
+        };
+
+        reader.readAsText(file);
+    }
+
+
+    // Helper to get expected property keys for validation
+    function getExpectedPropertiesForType(type) {
+        switch (type) {
+            case 'lens':             return ['f_mm'];
+            case 'mirror_spherical': return ['R_mm'];
+            case 'mirror_flat':      return [];
+            case 'slab_dielectric':  return ['n_ratio', 'width_mm'];
+            case 'abcd_generic':     return ['A', 'B_mm', 'C_perm', 'D'];
+            default:
+                console.warn("Validation check: Unknown element type encountered during import:", type);
+                return []; // Assume no properties for unknown types
+        }
+    }
+
+    // =========================================================================
     // === EVENT HANDLERS ======================================================
     // =========================================================================
 
@@ -988,6 +1247,9 @@
         showElementsCheck = document.getElementById('showElementsCheck');
         showWaistsCheck = document.getElementById('showWaistsCheck');
         interactiveCanvasElement = document.getElementById('interactiveCanvas');
+        exportSetupBtn = document.getElementById('exportSetupBtn');
+        importSetupBtn = document.getElementById('importSetupBtn');
+        importSetupInput = document.getElementById('importSetupInput');
 
         // Property Groups and Inputs (structured)
         propGroups = {
@@ -1006,72 +1268,75 @@
             C: document.getElementById('prop-C'), D: document.getElementById('prop-D'),
         };
          // Basic check if essential elements were found
-         if (!elementTypeSelect || !addElementBtn || !opticsTableBody || !plotWDiv || !interactiveCanvasElement) {
-             console.error("FATAL: Could not find essential DOM elements. Aborting initialization.");
-             alert("Error initializing the page. Some elements are missing. Check the console (F12).");
-             return false; // Indicate failure
-         }
-         return true; // Indicate success
-    }
-
-    function setupEventListeners() {
-        // Add Element Controls
-        if (elementTypeSelect) elementTypeSelect.addEventListener('change', handleElementTypeChange);
-        if (addElementBtn) addElementBtn.addEventListener('click', handleAddElement);
-
-        // Plot Controls
-        if (showElementsCheck) showElementsCheck.addEventListener('change', handlePlotOptionChange);
-        if (showWaistsCheck) showWaistsCheck.addEventListener('change', handlePlotOptionChange);
-
-        // Export Buttons
-        if (exportWBtn) exportWBtn.addEventListener('click', handleExportW);
-        if (exportRBtn) exportRBtn.addEventListener('click', handleExportR);
-
-        // Window Resize
-        window.addEventListener('resize', handleResize);
-
-        // Note: Table edit listeners are added dynamically in addTableRow/createTableInput/addRelPosInput
-    }
-
-    function initialize() {
-        console.log("Initializing Simulator...");
-        if (!initDOMReferences()) return; // Stop if critical elements are missing
-
-        // Set initial UI state for property inputs
-        handleElementTypeChange();
-
-        // Initialize Canvas Controller (pass simulation update callback)
-        if (typeof CanvasController !== 'undefined' && CanvasController.init) {
-            // Pass opticalElements and beamParams by reference, and runSimulation as the callback
-            CanvasController.init(interactiveCanvasElement, opticalElements, beamParams, runSimulation);
-        } else {
-            console.error("CanvasController is not loaded or defined! Interactive canvas will not work.");
-            if(interactiveCanvasElement) interactiveCanvasElement.style.display = 'none'; // Hide canvas if controller missing
+         if (!elementTypeSelect || !addElementBtn || !opticsTableBody || !plotWDiv || !interactiveCanvasElement || !exportSetupBtn || !importSetupBtn || !importSetupInput) { // <-- Check new elements
+            console.error("FATAL: Could not find essential DOM elements. Aborting initialization.");
+            alert("Error initializing the page. Some elements are missing. Check the console (F12).");
+            return false; // Indicate failure
         }
+        return true; // Indicate success
+   }
 
-        // Attach event listeners
-        setupEventListeners();
+   function setupEventListeners() {
+       // Add Element Controls
+       if (elementTypeSelect) elementTypeSelect.addEventListener('change', handleElementTypeChange);
+       if (addElementBtn) addElementBtn.addEventListener('click', handleAddElement);
 
-        // Run initial simulation
-        try {
-            runSimulation();
-        } catch (e) {
-            console.error("Error during initial simulation run:", e);
-            // Error is handled within runSimulation/handleSimulationError now
-        }
+       // Plot Controls
+       if (showElementsCheck) showElementsCheck.addEventListener('change', handlePlotOptionChange);
+       if (showWaistsCheck) showWaistsCheck.addEventListener('change', handlePlotOptionChange);
 
-        // Trigger resize once after initial setup/render to ensure sizes match
-        setTimeout(handleResize, 150); // Slightly longer timeout
-        console.log("Initialization complete.");
-    }
+       // Export Buttons
+       if (exportWBtn) exportWBtn.addEventListener('click', handleExportW);
+       if (exportRBtn) exportRBtn.addEventListener('click', handleExportR);
+       if (exportSetupBtn) exportSetupBtn.addEventListener('click', handleExportSetup); // <-- ADDED
 
-    // --- Auto-run Initialization on DOM Ready ---
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initialize);
-    } else {
-        // DOMContentLoaded has already fired
-        initialize();
-    }
+       // Import Button and File Input
+       if (importSetupBtn) importSetupBtn.addEventListener('click', handleImportSetupTrigger); // <-- ADDED
+       if (importSetupInput) importSetupInput.addEventListener('change', handleImportSetupFileSelect); // <-- ADDED
+
+       // Window Resize
+       window.addEventListener('resize', handleResize);
+
+       // Note: Table edit listeners are added dynamically
+   }
+
+   function initialize() {
+       console.log("Initializing Simulator...");
+       if (!initDOMReferences()) return; // Stop if critical elements are missing
+
+       // Set initial UI state for property inputs
+       handleElementTypeChange();
+
+       // Initialize Canvas Controller (pass simulation update callback)
+       if (typeof CanvasController !== 'undefined' && CanvasController.init) {
+           CanvasController.init(interactiveCanvasElement, opticalElements, beamParams, runSimulation);
+       } else {
+           console.error("CanvasController is not loaded or defined! Interactive canvas will not work.");
+           if(interactiveCanvasElement) interactiveCanvasElement.style.display = 'none';
+       }
+
+       // Attach event listeners
+       setupEventListeners();
+
+       // Run initial simulation
+       try {
+           runSimulation();
+       } catch (e) {
+           console.error("Error during initial simulation run:", e);
+           // Error handled within runSimulation/handleSimulationError
+       }
+
+       // Trigger resize once after initial setup/render
+       setTimeout(handleResize, 150);
+       console.log("Initialization complete.");
+   }
+
+   // --- Auto-run Initialization on DOM Ready ---
+   if (document.readyState === 'loading') {
+       document.addEventListener('DOMContentLoaded', initialize);
+   } else {
+       initialize();
+   }
 
 })(); // End of IIFE
 

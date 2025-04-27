@@ -124,7 +124,19 @@
       </div>
 
       <div class="elements-table">
-        <h2>Optical System</h2>
+        <div class="table-header-controls">
+          <h2>Optical System</h2>
+          <div class="table-buttons">
+              <button id="exportSetupBtn" class="control-button" title="Export current setup to XML file">
+                  <i class="fa-solid fa-file-export"></i> Export Setup
+              </button>
+              <button id="importSetupBtn" class="control-button" title="Import setup from XML file (replaces current)">
+                  <i class="fa-solid fa-file-import"></i> Import Setup
+              </button>
+              <!-- Hidden file input for import -->
+              <input type="file" id="importSetupInput" accept=".xml" style="display: none;">
+          </div>
+      </div>
         <table id="opticsTable">
           <thead>
             <tr>
