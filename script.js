@@ -129,38 +129,65 @@
     // === GAUSSIAN BEAM PHYSICS ===============================================
     // =========================================================================
 
+    // This function is not currently used in the simulation path.
+    // If it were, M2 handling would need to be considered based on context.
     function calculateQ(w_m, R_m, lambda_m) {
         if (w_m <= 0) return complex(0, Infinity);
-        const term2 = lambda_m / (PI * w_m * w_m);
+        const term2 = lambda_m / (PI * w_m * w_m); // This is 1/zR for an M2=1 beam if lambda_m is physical.
         const R_inv = (isFinite(R_m) && R_m !== 0) ? 1.0 / R_m : 0;
         const q_inv = complex(R_inv, -term2);
         return complexReciprocal(q_inv);
     }
 
-    function calculateWR(q, lambda_m) {
+    // Calculates w and R from a q-parameter and a lambda_arg.
+    // If q.im is zR_M2 and lambda_arg is lambda_physical_in_medium,
+    // then w_m returned is w_actual / sqrt(M2).
+    function calculateWR(q, lambda_arg) { // lambda_arg is physical wavelength in medium
         if (complexMagSq(q) === 0) return { w_m: 0, R_m: 0 };
         const q_inv = complexReciprocal(q);
         const R_m = (q_inv.re === 0) ? Infinity : 1.0 / q_inv.re;
-        const w_sq_term = -lambda_m / (PI * q_inv.im);
+        // q.im = zR_M2 (M2-affected Rayleigh range)
+        // lambda_arg = lambda_physical_in_medium = lambda_vac / n
+        // w_sq_term = -lambda_arg / (PI * q_inv.im)
+        // if q is at waist (q.re=0), q_inv.im = -1/q.im
+        // w_sq_term = lambda_arg * q.im / PI
+        // w_m = sqrt(lambda_arg * q.im / PI) -> this is w_actual / sqrt(M2)
+        const w_sq_term = -lambda_arg / (PI * q_inv.im);
         const w_m = q_inv.im !== 0 ? Math.sqrt(Math.abs(w_sq_term)) : Infinity;
         return { w_m, R_m };
     }
 
-    function calculateBeamDerivedParams(w0_m, lambda_m, n_medium, M2) {
-        if (w0_m <= 0 || !isFinite(w0_m)) return { zR_m: 0, theta_rad: 0 };
-        const lambda_eff_m = lambda_m / n_medium;
-        const zR_m = PI * w0_m * w0_m / (lambda_eff_m * M2);
-        const theta_rad = (lambda_eff_m * M2) / (PI * w0_m);
+    // Calculates zR and theta from actual physical w0_m, lambda_vac, n_medium, and M2.
+    function calculateBeamDerivedParams(w0_m_actual, lambda_m_vac, n_medium, M2_factor) {
+        if (w0_m_actual <= 0 || !isFinite(w0_m_actual)) return { zR_m: 0, theta_rad: 0 };
+        const lambda_in_medium_m = lambda_m_vac / n_medium;
+        // zR_M2 = (PI * w0_actual^2) / (lambda_in_medium * M2_factor)
+        //       = (PI * w0_actual^2 * n_medium) / (lambda_vac * M2_factor)
+        const zR_m = PI * w0_m_actual * w0_m_actual / (lambda_in_medium_m * M2_factor);
+        // theta_M2 = (lambda_in_medium * M2_factor) / (PI * w0_actual)
+        //          = ( (lambda_vac / n_medium) * M2_factor) / (PI * w0_actual)
+        const theta_rad = (lambda_in_medium_m * M2_factor) / (PI * w0_m_actual);
         return { zR_m, theta_rad };
     }
 
-    function findWaistFromQ(q_in, lambda_m, n_medium, M2) {
-        const lambda_eff_m = lambda_m / n_medium;
-        const z_waist_rel_m = -q_in.re;
-        const q_waist = complex(0, q_in.im);
-        const { w_m: w0_m } = calculateWR(q_waist, lambda_eff_m);
-        const { zR_m, theta_rad } = calculateBeamDerivedParams(w0_m, lambda_m, n_medium, M2);
-        return { w0_m, z_waist_rel_m, zR_m, theta_rad };
+    // Finds new waist parameters (actual physical w0, z_waist_rel, zR_M2, theta_M2) from an incoming q_in.
+    // q_in.im is the M2-affected Rayleigh range.
+    function findWaistFromQ(q_in, lambda_m_vac, n_medium, M2_factor) {
+        const lambda_in_medium_m = lambda_m_vac / n_medium;
+        const z_waist_rel_m = -q_in.re; // Distance from current point to new waist
+        const q_waist = complex(0, q_in.im); // q-parameter at the new waist (q_waist.im is new zR_M2)
+
+        // calculateWR returns w_calc = w0_actual_new / sqrt(M2_factor)
+        const { w_m: w0_calc } = calculateWR(q_waist, lambda_in_medium_m);
+
+        // Correct to get the actual physical waist
+        const w0_actual_new_m = w0_calc * Math.sqrt(M2_factor);
+
+        // Calculate derived parameters using the actual physical waist
+        const { zR_m, theta_rad } = calculateBeamDerivedParams(w0_actual_new_m, lambda_m_vac, n_medium, M2_factor);
+        // Note: zR_m here should be equal to q_in.im, ensuring self-consistency.
+
+        return { w0_m: w0_actual_new_m, z_waist_rel_m, zR_m, theta_rad };
     }
 
     // =========================================================================
@@ -173,10 +200,16 @@
     const sphericalMirrorMatrix = (R_m) => R_m === 0 ? identityMatrix() : [[1, 0], [-2.0 / R_m, 1]];
     const flatMirrorMatrix = () => identityMatrix();
     const dielectricSlabMatrix = (n1_base, n2_over_n1_ratio, width_m) => {
+        // The q-parameter propagation already accounts for base refractive index n1_base.
+        // The matrix for a slab embedded in a medium n1, with slab index n2, and thickness W is:
+        // A=1, B=W/n_ratio_slab_to_embedding = W / (n2/n1) , C=0, D=1
+        // Here, n2_over_n1_ratio is n_slab / n_base_medium.
         if (n2_over_n1_ratio <= 0) {
             console.warn("Invalid n ratio for dielectric slab:", n2_over_n1_ratio);
             return identityMatrix();
         }
+        // The effective B for ABCD matrix operating on q (which is defined using lambda_vac/n_base)
+        // is physical_width / (n_slab/n_base)
         const B_eff_m = width_m / n2_over_n1_ratio;
         return [[1, B_eff_m], [0, 1]];
     };
@@ -188,6 +221,7 @@
             case 'lens':             return thinLensMatrix(props.f_mm / 1000.0);
             case 'mirror_spherical': return sphericalMirrorMatrix(props.R_mm / 1000.0);
             case 'mirror_flat':      return flatMirrorMatrix();
+            // Pass n1_base to slab_dielectric for clarity, though it might not directly use it if n_ratio is n_slab/n_base
             case 'slab_dielectric':  return dielectricSlabMatrix(n1_base, props.n_ratio, props.width_mm / 1000.0);
             case 'abcd_generic':     return genericABCDMatrix(props.A, props.B_mm / 1000.0, props.C_perm * 1000.0, props.D);
             default:
@@ -223,16 +257,18 @@
         //console.log("Running simulation..."); // Log start
 
         // 1. Get Input Parameters & Convert to SI units (meters)
-        const w0_m = beamParams.w0_um / 1e6;
+        const w0_input_m = beamParams.w0_um / 1e6; // This is the actual physical waist
         const z0_m = beamParams.z0_mm / 1000.0;
-        const lambda_m = beamParams.lambda_nm / 1e9;
-        const M2 = beamParams.M2;
-        const n1_base = beamParams.n;
+        const lambda_vac_m = beamParams.lambda_nm / 1e9;
+        const M2_factor = beamParams.M2;
+        const n1_base_medium_idx = beamParams.n;
         const plot_end_z_m = beamParams.plotRangeZ_mm / 1000.0;
-        const lambda_eff_m = lambda_m / n1_base;
+        
+        // Effective wavelength in the base medium (physical wavelength)
+        const lambda_in_base_medium_m = lambda_vac_m / n1_base_medium_idx;
 
         // --- Input Validation ---
-        if (w0_m <= 0 || lambda_m <= 0 || M2 < 1.0 || n1_base < 1.0 || !isFinite(z0_m) || !isFinite(plot_end_z_m) || isNaN(w0_m) || isNaN(lambda_m) || isNaN(M2) || isNaN(n1_base) || isNaN(z0_m) || isNaN(plot_end_z_m)) {
+        if (w0_input_m <= 0 || lambda_vac_m <= 0 || M2_factor < 1.0 || n1_base_medium_idx < 1.0 || !isFinite(z0_m) || !isFinite(plot_end_z_m) || isNaN(w0_input_m) || isNaN(lambda_vac_m) || isNaN(M2_factor) || isNaN(n1_base_medium_idx) || isNaN(z0_m) || isNaN(plot_end_z_m)) {
             console.error("Invalid initial beam parameters:", beamParams);
             handleSimulationError("Invalid Initial Beam Parameters");
             return; // Stop simulation
@@ -242,17 +278,20 @@
             // 2. Sort Elements by Position
             opticalElements.sort((a, b) => a.position_mm - b.position_mm);
 
-            // 3. Initial Beam Setup & Derived Params
-            const { zR_m: initial_zR_m, theta_rad: initial_theta_rad } = calculateBeamDerivedParams(w0_m, lambda_m, n1_base, M2);
-            const q_at_waist = complex(0, initial_zR_m);
+            // 3. Initial Beam Setup & Derived Params (using actual physical w0_input_m)
+            const { zR_m: initial_zR_M2_m, theta_rad: initial_theta_M2_rad } = calculateBeamDerivedParams(w0_input_m, lambda_vac_m, n1_base_medium_idx, M2_factor);
+            const q_at_waist = complex(0, initial_zR_M2_m); // q.im is the M2-affected Rayleigh range
 
             // 4. Determine Simulation Start/End
             let min_element_pos_m = z0_m;
-            if (opticalElements.length > 0 && !isNaN(opticalElements[0].position_mm)) { // Check first element pos validity
+            if (opticalElements.length > 0 && !isNaN(opticalElements[0].position_mm)) {
                 min_element_pos_m = Math.min(min_element_pos_m, opticalElements[0].position_mm / 1000.0);
             }
-            const simulation_start_z_m = Math.min(0, z0_m - initial_zR_m * 2, min_element_pos_m - initial_zR_m * 0.5);
+            // Ensure simulation starts reasonably before the initial waist or first element
+            const typical_zR_display = Math.max(initial_zR_M2_m, 0.01); // Avoid zero or negative zR for range calc
+            const simulation_start_z_m = Math.min(0, z0_m - typical_zR_display * 2, min_element_pos_m - typical_zR_display * 0.5);
             const simulation_end_z_m = plot_end_z_m;
+
 
             // 5. Calculate Initial q
             const dist_from_waist_to_start = simulation_start_z_m - z0_m;
@@ -268,37 +307,42 @@
             // Add initial beam parameters to table
             tableData.push({
                 opticType: "Input Beam", position_mm: beamParams.z0_mm, rel_pos_mm: null,
-                waist_um: beamParams.w0_um, waist_pos_mm: beamParams.z0_mm,
-                zR_mm: initial_zR_m * 1000.0, theta_mrad: initial_theta_rad * 1000.0, id: 'initial'
+                waist_um: beamParams.w0_um, waist_pos_mm: beamParams.z0_mm, // Displaying input physical waist
+                zR_mm: initial_zR_M2_m * 1000.0, theta_mrad: initial_theta_M2_rad * 1000.0, id: 'initial'
             });
-            plotData.waistMarkers.push({ z: z0_m, w: w0_m, label: `Waist 0 (${(z0_m * 1000).toFixed(1)}mm)` });
+            // For waist marker, w is physical waist radius in meters
+            plotData.waistMarkers.push({ z: z0_m, w: w0_input_m, label: `Waist 0 (${(z0_m * 1000).toFixed(1)}mm)` });
+
 
             // 7. Propagate through System
-            let previous_element_pos_m = z0_m; // Use z0 as the 'previous' position for the first element
+            let previous_element_pos_m = z0_m; 
 
             opticalElements.forEach((element, index) => {
                 const element_pos_m = element.position_mm / 1000.0;
 
                 if (isNaN(element_pos_m)) {
                     console.warn(`Skipping element ${index + 1} due to invalid position: ${element.position_mm}`);
-                    // Optionally add a placeholder row to the table indicating the error?
-                    return; // Skip this element
+                    return; 
                 }
 
                 const dist_to_element_m = element_pos_m - z_current_m;
 
                 // A. Propagate free space *before* the element
-                if (dist_to_element_m > 1e-12) {
+                if (dist_to_element_m > 1e-12) { // Check for significant positive distance
                     for (let i = 1; i <= N_POINTS_PER_SEGMENT; i++) {
                         const z_step_rel = dist_to_element_m * (i / N_POINTS_PER_SEGMENT);
                         const q_step = complexAdd(q_current, complex(z_step_rel, 0));
-                        const { w_m, R_m } = calculateWR(q_step, lambda_eff_m);
+                        
+                        // calculateWR returns w_calc = w_actual_at_z / sqrt(M2_factor)
+                        const { w_m: w_calc, R_m } = calculateWR(q_step, lambda_in_base_medium_m);
+                        const w_actual_at_z_m = w_calc * Math.sqrt(M2_factor); // Correct to physical radius
+
                         const z_abs_m = z_current_m + z_step_rel;
                         const z_abs_mm = z_abs_m * 1000.0;
 
                         if (z_abs_mm > last_z_plotted_mm + 1e-9 && z_abs_m <= simulation_end_z_m + 1e-9) {
                             plotData.z.push(z_abs_mm);
-                            plotData.w.push(w_m * 1e6);
+                            plotData.w.push(w_actual_at_z_m * 1e6); // Store physical radius in um
                             plotData.R.push(isFinite(R_m) ? R_m * 1000.0 : (R_m > 0 ? Infinity : -Infinity));
                             last_z_plotted_mm = z_abs_mm;
                         }
@@ -306,33 +350,35 @@
                     q_current = complexAdd(q_current, complex(dist_to_element_m, 0));
                     z_current_m = element_pos_m;
                 } else {
-                     // Handle cases where element is at or before current z (due to sorting or same position)
                      if (dist_to_element_m < -1e-12) {
                          console.warn(`Simulation jump: Element ${index + 1} at ${element_pos_m * 1000}mm is before current beam position ${z_current_m * 1000}mm. Advancing position.`);
                      }
-                     z_current_m = element_pos_m; // Always update z_current_m to element's position
+                     z_current_m = element_pos_m; 
                 }
 
                 // B. Apply the element's transformation
-                const M_element = getElementMatrix(element, n1_base);
+                // n1_base_medium_idx is passed for context, e.g. for dielectric slab effective B calculation
+                const M_element = getElementMatrix(element, n1_base_medium_idx);
                 q_current = transformQ(q_current, M_element);
 
-                // C. Calculate output beam parameters (new waist)
-                const { w0_m: w0_new_m, z_waist_rel_m: z_waist_rel_new_m, zR_m: zR_new_m, theta_rad: theta_new_rad } = findWaistFromQ(q_current, lambda_m, n1_base, M2);
-                const waist_abs_pos_m = z_current_m + z_waist_rel_new_m; // Waist position relative to *this element*
+                // C. Calculate output beam parameters (new physical waist, new zR_M2, new theta_M2)
+                const { w0_m: w0_actual_new_m, z_waist_rel_m: z_waist_rel_new_m, zR_m: zR_M2_new_m, theta_rad: theta_M2_new_rad } = findWaistFromQ(q_current, lambda_vac_m, n1_base_medium_idx, M2_factor);
+                const waist_abs_pos_m = z_current_m + z_waist_rel_new_m; 
 
                 // D. Add element data to the table
                 const rel_pos_mm = (element_pos_m - previous_element_pos_m) * 1000.0;
                 tableData.push({
                     opticType: formatElementType(element.type), position_mm: element.position_mm, rel_pos_mm: rel_pos_mm,
-                    properties: formatElementProperties(element), // Formatted string for display, actual inputs generated later
-                    waist_um: w0_new_m * 1e6, waist_pos_mm: waist_abs_pos_m * 1000.0,
-                    zR_mm: zR_new_m * 1000.0, theta_mrad: theta_new_rad * 1000.0, id: element.id
+                    properties: formatElementProperties(element), 
+                    waist_um: w0_actual_new_m * 1e6, // Store physical waist in um
+                    waist_pos_mm: waist_abs_pos_m * 1000.0,
+                    zR_mm: zR_M2_new_m * 1000.0, theta_mrad: theta_M2_new_rad * 1000.0, id: element.id
                 });
 
-                // E. Add markers for plots
+                // E. Add markers for plots (element z in m, waist w in m)
                 plotData.elementMarkers.push({ z: element_pos_m, label: `${formatElementType(element.type)} ${index + 1}` });
-                plotData.waistMarkers.push({ z: waist_abs_pos_m, w: w0_new_m, label: `Waist ${index + 1}` });
+                plotData.waistMarkers.push({ z: waist_abs_pos_m, w: w0_actual_new_m, label: `Waist ${index + 1}` });
+
 
                 // F. Update position tracker for next relative calculation
                 previous_element_pos_m = element_pos_m;
@@ -344,13 +390,17 @@
                 for (let i = 1; i <= N_POINTS_PER_SEGMENT; i++) {
                     const z_step_rel = final_dist_m * (i / N_POINTS_PER_SEGMENT);
                     const q_step = complexAdd(q_current, complex(z_step_rel, 0));
-                    const { w_m, R_m } = calculateWR(q_step, lambda_eff_m);
+                    
+                    // calculateWR returns w_calc = w_actual_at_z / sqrt(M2_factor)
+                    const { w_m: w_calc, R_m } = calculateWR(q_step, lambda_in_base_medium_m);
+                    const w_actual_at_z_m = w_calc * Math.sqrt(M2_factor); // Correct to physical radius
+
                     const z_abs_m = z_current_m + z_step_rel;
                     const z_abs_mm = z_abs_m * 1000.0;
 
                     if (z_abs_mm > last_z_plotted_mm + 1e-9 && z_abs_m <= simulation_end_z_m + 1e-9) {
                         plotData.z.push(z_abs_mm);
-                        plotData.w.push(w_m * 1e6);
+                        plotData.w.push(w_actual_at_z_m * 1e6); // Store physical radius in um
                         plotData.R.push(isFinite(R_m) ? R_m * 1000.0 : (R_m > 0 ? Infinity : -Infinity));
                         last_z_plotted_mm = z_abs_mm;
                     }
@@ -358,11 +408,11 @@
             }
 
             // 9. Store and Update UI
-            latestPlotData = { ...plotData }; // Make a shallow copy for storage
+            latestPlotData = { ...plotData }; 
             updateTable(tableData);
             updatePlots(plotData);
             if (typeof CanvasController !== 'undefined' && CanvasController.draw) {
-                CanvasController.draw(latestPlotData); // Pass only plot data
+                CanvasController.draw(latestPlotData); 
             } else {
                 console.warn("CanvasController not ready for drawing.");
             }
@@ -392,11 +442,11 @@
                      waist_um: beamParams.w0_um, waist_pos_mm: beamParams.z0_mm,
                      zR_mm: null, theta_mrad: null, id: 'initial'
                  }, ...opticalElements.map((el, index) => ({
-                     opticType: formatElementType(el.type), position_mm: el.position_mm, rel_pos_mm: '---', // Cannot calc rel pos easily here
+                     opticType: formatElementType(el.type), position_mm: el.position_mm, rel_pos_mm: '---', 
                      properties: formatElementProperties(el),
                      waist_um: null, waist_pos_mm: null, zR_mm: null, theta_mrad: null, id: el.id
                  }))];
-                 updateTable(currentTableData); // Try to redraw table with potentially problematic values
+                 updateTable(currentTableData); 
              } catch (e) {
                  console.error("Error trying to redraw table during error handling:", e);
                  opticsTableBody.innerHTML = `<tr><td colspan="9" style="color: red; text-align: center;">Error: ${message}. Failed to redraw table.</td></tr>`;
@@ -441,7 +491,7 @@
             posCell.appendChild(createTableInput('initial', 'z0_mm', item.position_mm, 'any', null, "Position of the initial beam waist (z₀) (mm)."));
         } else {
              const posInput = createTableInput(item.id, 'position_mm', item.position_mm, 'any', null, `Position of this '${formatElementType(item.opticType)}' (mm).`);
-             posInput.dataset.index = index; // Add index for potential use
+             posInput.dataset.index = index; 
              posCell.appendChild(posInput);
         }
 
@@ -455,15 +505,14 @@
             relPosInput.classList.add('rel-pos-input');
             const relPosValue = parseFloat(item.rel_pos_mm);
              if (item.rel_pos_mm !== null && !isNaN(relPosValue)) {
-                 // Use createTableInput's logic to determine precision for display
                  const dummyInput = createTableInput('dummy', 'rel_pos_mm', relPosValue, 'any');
                  relPosInput.value = relPosValue.toFixed(dummyInput.precision);
              } else {
-                 relPosInput.value = ''; // Clear if null or NaN
+                 relPosInput.value = ''; 
              }
             relPosInput.step = 'any';
             relPosInput.dataset.id = item.id;
-            relPosInput.dataset.index = index; // Use the passed element index (1-based)
+            relPosInput.dataset.index = index; 
             relPosInput.title = "Distance from the previous element/waist (mm). Edit to update absolute position.";
             relPosInput.addEventListener('change', handleTableRelPosEdit);
             relPosCell.appendChild(relPosInput);
@@ -475,7 +524,7 @@
         propCell.innerHTML = '';
         if (item.id === 'initial') {
             propCell.appendChild(document.createTextNode('λ='));
-            propCell.appendChild(createTableInput('initial', 'lambda_nm', beamParams.lambda_nm, 'any', 1, "Wavelength of the light in vacuum.")); // Step 'any' for lambda
+            propCell.appendChild(createTableInput('initial', 'lambda_nm', beamParams.lambda_nm, 'any', 1, "Wavelength of the light in vacuum.")); 
             propCell.appendChild(document.createTextNode('nm'));
             propCell.appendChild(document.createElement('br'));
             propCell.appendChild(document.createTextNode('M²='));
@@ -515,7 +564,7 @@
                             propCell.appendChild(document.createTextNode(', B='));
                             propCell.appendChild(createTableInput(item.id, 'B_mm', element.property.B_mm, 'any'));
                             propCell.appendChild(document.createTextNode('mm'));
-                            propCell.appendChild(document.createElement('br')); // New line for C,D
+                            propCell.appendChild(document.createElement('br')); 
                             propCell.appendChild(document.createTextNode('C='));
                             propCell.appendChild(createTableInput(item.id, 'C_perm', element.property.C_perm, 0.0001));
                             propCell.appendChild(document.createTextNode('/mm, D='));
@@ -569,14 +618,13 @@
             case 'M2': precision = 1; break;
             case 'n': case 'n_ratio': precision = 2; break;
             case 'C_perm': precision = 4; break;
-            case 'w0_um': case 'lambda_nm': precision = 1; break; // Display lambda with 1 decimal
+            case 'w0_um': case 'lambda_nm': precision = 1; break; 
             default: precision = allowsDecimals ? 2 : 0; break;
         }
-        input.precision = precision; // Store for potential reuse
+        input.precision = precision; 
 
         let parsedValue = parseFloat(value);
         if (isNaN(parsedValue)) {
-            // Sensible defaults on NaN input
             if (propertyName === 'M2' || propertyName === 'n') parsedValue = 1.0;
             else if (propertyName === 'lambda_nm') parsedValue = beamParams.lambda_nm || 1064;
             else if (propertyName === 'plotRangeZ_mm') parsedValue = beamParams.plotRangeZ_mm || 500;
@@ -587,8 +635,8 @@
         }
 
         input.value = parsedValue.toFixed(precision);
-        input.step = step === null ? 'any' : step; // Ensure step is set
-        if (minValue !== null) input.min = minValue;
+        input.step = step === null ? 'any' : String(step); // Ensure step is string for 'any'
+        if (minValue !== null) input.min = String(minValue);
         input.dataset.id = id;
         input.dataset.property = propertyName;
         if (description) input.title = description;
@@ -597,7 +645,7 @@
     }
 
     function updatePlots(plotData) {
-        if (!plotWDiv || !plotRDiv || typeof Plotly === 'undefined') return; // Need divs and Plotly
+        if (!plotWDiv || !plotRDiv || typeof Plotly === 'undefined') return; 
 
         if (!plotData || !plotData.z || plotData.z.length === 0) {
             Plotly.purge(plotWDiv);
@@ -609,7 +657,7 @@
 
         const showElements = showElementsCheck ? showElementsCheck.checked : true;
         const showWaists = showWaistsCheck ? showWaistsCheck.checked : true;
-        const largeFinite = 1e9; // For plotting Infinity R values
+        const largeFinite = 1e9; 
 
         // --- Calculate Full Data Ranges ---
         const allZValues = plotData.z;
@@ -617,27 +665,30 @@
         let maxZ = Math.max(allZValues.length > 0 ? Math.max(...allZValues) : (beamParams.z0_mm + 100), beamParams.plotRangeZ_mm);
         minZ = isNaN(minZ) ? -100 : minZ;
         maxZ = isNaN(maxZ) ? 500 : maxZ;
-        if (minZ >= maxZ) maxZ = minZ + 100;
+        if (minZ >= maxZ) maxZ = minZ + 100; // Ensure maxZ > minZ
         const xRangeBuffer = (maxZ - minZ) * 0.05 || 10;
         const fullXRange = [minZ - xRangeBuffer, maxZ + xRangeBuffer];
 
         const allWValues = plotData.w.filter(isFinite);
         let maxAbsW = allWValues.length > 0 ? Math.max(...allWValues.map(Math.abs)) : (beamParams.w0_um || 100);
-        maxAbsW = (maxAbsW <= 0 || isNaN(maxAbsW)) ? 100 : maxAbsW;
+        maxAbsW = (maxAbsW <= 0 || isNaN(maxAbsW)) ? 100 : maxAbsW; // Ensure positive, non-NaN maxAbsW
         const wRangeBuffer = maxAbsW * 0.10 || 1;
         const fullWRangeY = [-maxAbsW - wRangeBuffer, maxAbsW + wRangeBuffer];
+
 
         const plotR_vals = plotData.R.map(r => (!isFinite(r)) ? (r > 0 ? largeFinite : -largeFinite) : r);
         let minR_calc = plotR_vals.length > 0 ? Math.min(...plotR_vals) : -1000;
         let maxR_calc = plotR_vals.length > 0 ? Math.max(...plotR_vals) : 1000;
         minR_calc = isNaN(minR_calc) ? -1000 : minR_calc;
         maxR_calc = isNaN(maxR_calc) ? 1000 : maxR_calc;
-        if (minR_calc >= maxR_calc) maxR_calc = minR_calc + 1000;
+        if (minR_calc >= maxR_calc) maxR_calc = minR_calc + 1000; // Ensure maxR > minR
+        
         let rRangeBuffer = (maxR_calc - minR_calc) * 0.10;
         if (Math.abs(minR_calc) >= largeFinite || Math.abs(maxR_calc) >= largeFinite) rRangeBuffer = Math.max(100, Math.abs(maxR_calc - minR_calc) * 0.02);
-        if (maxR_calc === minR_calc) rRangeBuffer = Math.max(100, Math.abs(maxR_calc * 0.2));
-        rRangeBuffer = isFinite(rRangeBuffer) ? rRangeBuffer : 100;
+        if (maxR_calc === minR_calc) rRangeBuffer = Math.max(100, Math.abs(maxR_calc * 0.2)); // Handle case where all R values are the same
+        rRangeBuffer = isFinite(rRangeBuffer) ? rRangeBuffer : 100; // Fallback if rRangeBuffer is not finite
         const fullRRangeY = [minR_calc - rRangeBuffer, maxR_calc + rRangeBuffer];
+
 
         // --- Determine Plot Ranges (Preserve Zoom) ---
         const targetWRangeX = plotsInitialized.w ? (plotWDiv.layout?.xaxis?.range || fullXRange) : fullXRange;
@@ -647,32 +698,32 @@
 
         // --- Waist Plot ---
         const traceW = { x: plotData.z, y: plotData.w, mode: 'lines', name: 'W', line: { color: 'blue' } };
-        const traceW_neg = { x: plotData.z, y: plotData.w.map(w => -w), mode: 'lines', name: '-W', line: { color: 'blue' }, showlegend: false };
+        const traceW_neg = { x: plotData.z, y: plotData.w.map(w_val => -w_val), mode: 'lines', name: '-W', line: { color: 'blue' }, showlegend: false };
         const layoutW = {
             xaxis: { title: 'z (mm)', range: targetWRangeX, automargin: true, titlefont: { size: 10 } },
             yaxis: { title: 'w (µm)', range: targetWRangeY, automargin: true, titlefont: { size: 10 } },
             margin: { l: 35, r: 10, t: 5, b: 25 }, shapes: [], annotations: [], hovermode: 'x unified', showlegend: false
         };
         if (showElements && plotData.elementMarkers) {
-            const yRange = layoutW.yaxis.range;
+            const yRangeW = layoutW.yaxis.range; // Use y-axis range from the current plot
             plotData.elementMarkers.forEach(m => {
-                if (!m || isNaN(m.z)) return;
-                const xPos = m.z * 1000; // Marker position in mm
-                 if (xPos >= targetWRangeX[0] && xPos <= targetWRangeX[1]) { // Check if within current view
-                    layoutW.shapes.push({ type: 'line', x0: xPos, y0: yRange[0], x1: xPos, y1: yRange[1], line: { color: 'red', width: 1, dash: 'dot' } });
-                    layoutW.annotations.push({ x: xPos, y: yRange[1] * 0.98, text: m.label || '', showarrow: false, xanchor: 'left', yanchor: 'top', font: { size: 8, color: 'red' } });
+                if (!m || isNaN(m.z)) return; // m.z is in meters
+                const xPosMm = m.z * 1000; // Convert to mm for plotting
+                 if (xPosMm >= targetWRangeX[0] && xPosMm <= targetWRangeX[1]) { 
+                    layoutW.shapes.push({ type: 'line', x0: xPosMm, y0: yRangeW[0], x1: xPosMm, y1: yRangeW[1], line: { color: 'red', width: 1, dash: 'dot' } });
+                    layoutW.annotations.push({ x: xPosMm, y: yRangeW[1] * 0.98, text: m.label || '', showarrow: false, xanchor: 'left', yanchor: 'top', font: { size: 8, color: 'red' } });
                  }
             });
         }
         if (showWaists && plotData.waistMarkers) {
-            const xRange = layoutW.xaxis.range;
-            plotData.waistMarkers.forEach(m => {
+            //const xRangeW = layoutW.xaxis.range; // Not needed if yRangeW is used for conditional check
+            plotData.waistMarkers.forEach(m => { // m.z and m.w are in meters
                 if (!m || isNaN(m.z) || isNaN(m.w)) return;
-                const xPos = m.z * 1000; // Marker position in mm
-                 if (xPos >= xRange[0] && xPos <= xRange[1]) { // Check if within current view
-                    const wMarkUm = m.w * 1e6;
-                    layoutW.shapes.push({ type: 'line', x0: xPos, y0: -wMarkUm, x1: xPos, y1: wMarkUm, line: { color: 'green', width: 1.5, dash: 'solid' } });
-                    layoutW.annotations.push({ x: xPos, y: 0, text: (m.label || '') + ` (${xPos.toFixed(1)}mm)`, showarrow: true, arrowhead: 2, ax: -20, ay: -20, font: { size: 8, color: 'green' } });
+                const xPosMm = m.z * 1000; // Convert to mm
+                 if (xPosMm >= targetWRangeX[0] && xPosMm <= targetWRangeX[1]) { 
+                    const wMarkUm = m.w * 1e6; // Convert waist marker w to um
+                    layoutW.shapes.push({ type: 'line', x0: xPosMm, y0: -wMarkUm, x1: xPosMm, y1: wMarkUm, line: { color: 'green', width: 1.5, dash: 'solid' } });
+                    layoutW.annotations.push({ x: xPosMm, y: 0, text: (m.label || '') + ` (${xPosMm.toFixed(1)}mm)`, showarrow: true, arrowhead: 2, ax: -20, ay: -20, font: { size: 8, color: 'green' } });
                  }
             });
         }
@@ -688,12 +739,13 @@
             margin: { l: 35, r: 10, t: 5, b: 25 }, shapes: [], annotations: [], hovermode: 'x unified', showlegend: false
         };
         if (showElements && plotData.elementMarkers) {
-             const yRange = layoutR.yaxis.range;
+             const yRangeR = layoutR.yaxis.range; // Use y-axis range from current plot
              plotData.elementMarkers.forEach(m => {
-                 if (!m || isNaN(m.z)) return;
-                 const xPos = m.z * 1000; // Marker position in mm
-                  if (xPos >= targetRRangeX[0] && xPos <= targetRRangeX[1]) { // Check if within current view
-                     layoutR.shapes.push({ type: 'line', x0: xPos, y0: yRange[0], x1: xPos, y1: yRange[1], line: { color: 'red', width: 1, dash: 'dot' } });
+                 if (!m || isNaN(m.z)) return; // m.z is in meters
+                 const xPosMm = m.z * 1000; // Convert to mm
+                  if (xPosMm >= targetRRangeX[0] && xPosMm <= targetRRangeX[1]) { 
+                     layoutR.shapes.push({ type: 'line', x0: xPosMm, y0: yRangeR[0], x1: xPosMm, y1: yRangeR[1], line: { color: 'red', width: 1, dash: 'dot' } });
+                     // Annotations for RoC plot might be too busy, often omitted
                   }
              });
          }
@@ -706,7 +758,7 @@
     // =========================================================================
 
     function downloadCSV(filename, dataRows) {
-        if (!dataRows || dataRows.length <= 1) { // Check length > 1 because header row is always present
+        if (!dataRows || dataRows.length <= 1) { 
             alert("No data available to export."); return;
         }
         const csvContent = dataRows.map(row => row.join(",")).join("\n");
@@ -758,29 +810,26 @@
             const xmlDoc = document.implementation.createDocument(null, "opticalSystem", null);
             const root = xmlDoc.documentElement;
 
-            // Add Beam Parameters
             const beamNode = xmlDoc.createElement("beamParameters");
             for (const key in beamParams) {
                 if (Object.hasOwnProperty.call(beamParams, key)) {
-                    beamNode.setAttribute(key, beamParams[key]);
+                    beamNode.setAttribute(key, String(beamParams[key]));
                 }
             }
             root.appendChild(beamNode);
 
-            // Add Elements
             const elementsNode = xmlDoc.createElement("elements");
             opticalElements.forEach(element => {
                 const elementNode = xmlDoc.createElement("element");
                 elementNode.setAttribute("type", element.type);
-                elementNode.setAttribute("position_mm", element.position_mm);
-                // Don't save generated ID, it will be recreated on import
-                // elementNode.setAttribute("id", element.id);
+                elementNode.setAttribute("position_mm", String(element.position_mm));
+                // ID is not saved, it's recreated on import for uniqueness.
 
                 if (element.property && Object.keys(element.property).length > 0) {
                     const propertyNode = xmlDoc.createElement("property");
                     for (const propKey in element.property) {
                         if (Object.hasOwnProperty.call(element.property, propKey)) {
-                             propertyNode.setAttribute(propKey, element.property[propKey]);
+                             propertyNode.setAttribute(propKey, String(element.property[propKey]));
                         }
                     }
                     elementNode.appendChild(propertyNode);
@@ -802,7 +851,6 @@
     }
 
     function handleImportSetupTrigger() {
-        // Trigger the hidden file input
         if (importSetupInput) {
             importSetupInput.click();
         } else {
@@ -843,12 +891,11 @@
                     throw new Error("Invalid XML format: Missing <opticalSystem> root element.");
                 }
 
-                // --- Parse Beam Parameters into a temporary object ---
                 const beamNode = root.querySelector("beamParameters");
                 if (!beamNode) {
                     throw new Error("Invalid XML format: Missing <beamParameters> element.");
                 }
-                const importedBeamParams = {}; // Temporary storage
+                const importedBeamParams = {}; 
                 const expectedBeamParams = ['w0_um', 'z0_mm', 'lambda_nm', 'M2', 'n', 'plotRangeZ_mm'];
                 let missingBeamParam = null;
                 for (const key of expectedBeamParams) {
@@ -875,16 +922,14 @@
                       throw new Error(`Invalid XML format: Missing required beam parameter attribute '${missingBeamParam}'.`);
                  }
 
-                // --- Parse Elements into a temporary array ---
                 const elementsNode = root.querySelector("elements");
                 if (!elementsNode) {
                     throw new Error("Invalid XML format: Missing <elements> element.");
                 }
-                const importedElements = []; // Temporary storage
+                const importedElements = []; 
                 const elementNodes = elementsNode.querySelectorAll("element");
 
                 elementNodes.forEach((elNode, index) => {
-                    // ... (parsing logic for each element into the 'element' object remains the same) ...
                     const type = elNode.getAttribute("type");
                     const posStr = elNode.getAttribute("position_mm");
 
@@ -922,46 +967,29 @@
                     } else if (propNode) {
                          console.warn(`Element ${index + 1} (type ${type}): Found <property> tag but none are expected for this type. Ignoring properties.`);
                     }
-                    importedElements.push(element); // Add to temporary array
+                    importedElements.push(element); 
                 });
 
-
-                // --- SUCCESS: Update State IN PLACE ---
-
-                // 1. Update properties of the *existing* beamParams object
                 console.log("Updating beamParams object in place...");
-                // Optional: Clear any old keys that might not be in the import
-                // for (const key in beamParams) {
-                //     if (!importedBeamParams.hasOwnProperty(key)) {
-                //         delete beamParams[key];
-                //     }
-                // }
-                // Overwrite/add properties from the import
                 for (const key in importedBeamParams) {
                     if (Object.hasOwnProperty.call(importedBeamParams, key)) {
                         beamParams[key] = importedBeamParams[key];
                     }
                 }
+                // Clear any old keys in beamParams that weren't in the import, if desired,
+                // but generally overwriting is sufficient for the defined structure.
 
-                // 2. Update contents of the *existing* opticalElements array
                 console.log("Updating opticalElements array in place...");
-                opticalElements.length = 0; // Clear the array without changing the reference
-                // Add the imported elements into the *same* array object
+                opticalElements.length = 0; 
                 opticalElements.push(...importedElements);
-                // Alternatively, loop: importedElements.forEach(el => opticalElements.push(el));
-
-
+                
                 console.log("Setup imported successfully (in-place update).");
-                // alert("Setup imported successfully!"); // Alert might be annoying
-
-                runSimulation(); // Re-run simulation with the updated data
+                runSimulation(); 
 
             } catch (error) {
                 console.error("Error importing setup:", error);
                 alert(`Error importing setup: ${error.message}\nPlease ensure the XML file is valid and has the correct structure.`);
-                 // State was not modified in place if error occurred before the update block
             } finally {
-                // Reset file input value so the same file can be selected again
                 event.target.value = null;
             }
         };
@@ -969,7 +997,7 @@
         reader.onerror = function(e) {
             console.error("Error reading file:", e);
             alert("Error reading the selected file.");
-            event.target.value = null; // Reset input
+            event.target.value = null; 
         };
 
         reader.readAsText(file);
@@ -986,7 +1014,7 @@
             case 'abcd_generic':     return ['A', 'B_mm', 'C_perm', 'D'];
             default:
                 console.warn("Validation check: Unknown element type encountered during import:", type);
-                return []; // Assume no properties for unknown types
+                return []; 
         }
     }
 
@@ -995,14 +1023,14 @@
     // =========================================================================
 
     function handlePlotOptionChange() {
-        runSimulation(); // Re-run simulation to update plots with new options
+        runSimulation(); 
     }
 
     function handleElementTypeChange() {
         const selectedType = elementTypeSelect.value;
         Object.values(propGroups).forEach(group => { if (group) group.style.display = 'none'; });
         if (propGroups[selectedType]) {
-            propGroups[selectedType].style.display = 'inline-flex'; // Use inline-flex
+            propGroups[selectedType].style.display = 'inline-flex'; 
         }
     }
 
@@ -1012,7 +1040,7 @@
         let properties = {};
         let isValid = !isNaN(position_mm);
 
-        try { // Wrap property parsing in try-catch
+        try { 
             switch(type) {
                 case 'lens':
                     properties.f_mm = parseFloat(propInputs.f.value);
@@ -1072,15 +1100,12 @@
         const rawValue = target.value;
         let newValue = parseFloat(rawValue);
 
-        // Validate NaN first
         if (isNaN(newValue)) {
             alert(`Invalid value "${rawValue}" entered for ${propertyToChange}. Please enter a valid number.`);
-            // Attempt to reset input field to previous valid value
             resetInputValueOnError(target, id, propertyToChange);
             return;
         }
 
-        // Apply constraints and clamp
         let clampedValue = newValue;
         switch (propertyToChange) {
             case 'w0_um':     clampedValue = Math.max(0.1, newValue); break;
@@ -1091,16 +1116,13 @@
             case 'width_mm':  clampedValue = Math.max(0, newValue); break;
         }
 
-        // Update input field visually *if* value was clamped
         if (clampedValue !== newValue) {
             console.warn(`Value for ${propertyToChange} clamped from ${newValue} to ${clampedValue}`);
-            // Use createTableInput's logic to determine precision for display update
             const dummyInput = createTableInput('dummy', propertyToChange, clampedValue, target.step || 'any');
             target.value = clampedValue.toFixed(dummyInput.precision);
-            newValue = clampedValue; // Use the clamped value for state update
+            newValue = clampedValue; 
         }
 
-        // Update state (beamParams or opticalElements)
         if (id === 'initial') {
             if (propertyToChange in beamParams) {
                 beamParams[propertyToChange] = newValue;
@@ -1114,18 +1136,17 @@
                     opticalElements[elementIndex].position_mm = newValue;
                 } else if (opticalElements[elementIndex].property) {
                     opticalElements[elementIndex].property[propertyToChange] = newValue;
-                } else if (opticalElements[elementIndex].type !== 'mirror_flat'){ // Don't add properties to flat mirror
-                     // Handle case where property object might be missing (shouldn't happen normally)
+                } else if (opticalElements[elementIndex].type !== 'mirror_flat'){ 
                      console.warn(`Property object for element ${id} missing, creating it.`);
                      opticalElements[elementIndex].property = { [propertyToChange]: newValue };
                 } else {
-                     console.warn(`Cannot set property '${propertyToChange}' on flat mirror ${id}.`); return; // Don't run sim if property cannot be set
+                     console.warn(`Cannot set property '${propertyToChange}' on flat mirror ${id}.`); return; 
                 }
             } else {
                 console.warn("Element not found for edit:", id); return;
             }
         }
-        runSimulation(); // Recalculate
+        runSimulation(); 
     }
 
     function handleTableRelPosEdit(event) {
@@ -1143,11 +1164,10 @@
         const elementStorageIndex = opticalElements.findIndex(el => el.id === id);
         if (elementStorageIndex === -1) {
             console.error("Could not find element to update relative position:", id);
-            runSimulation(); // Resync table
+            runSimulation(); 
             return;
         }
 
-        // Get CURRENT sorted list of positions (including z0) to find the *actual* previous element
         const sortedPositions = [
             { id: 'initial', position_mm: beamParams.z0_mm },
             ...opticalElements.map(el => ({ id: el.id, position_mm: el.position_mm }))
@@ -1155,9 +1175,9 @@
 
         const currentSortedIndex = sortedPositions.findIndex(el => el.id === id);
 
-        if (currentSortedIndex < 1) { // Cannot calculate relative position for the very first item
+        if (currentSortedIndex < 1) { 
             console.error("Cannot set relative position for the first element in the sorted list.");
-            resetInputValueOnError(target, id, 'rel_pos_mm'); // Reset the input
+            resetInputValueOnError(target, id, 'rel_pos_mm'); 
             return;
         }
 
@@ -1165,7 +1185,7 @@
 
         if (isNaN(prevElementAbsPos)) {
             console.error("Previous element position is invalid for relative calculation.");
-            runSimulation(); // Resync table
+            runSimulation(); 
             return;
         }
 
@@ -1175,7 +1195,6 @@
         runSimulation();
     }
 
-    // Helper to reset input value on validation error
     function resetInputValueOnError(targetInputElement, elementId, propertyName) {
          let originalValue;
          if (elementId === 'initial') {
@@ -1186,16 +1205,15 @@
                   if (propertyName === 'position_mm') {
                       originalValue = element.position_mm;
                   } else if (propertyName === 'rel_pos_mm') {
-                      // Recalculate original relative position
                       const sortedPositions = [
                           { id: 'initial', position_mm: beamParams.z0_mm },
                           ...opticalElements.map(el => ({ id: el.id, position_mm: el.position_mm }))
                       ].sort((a, b) => a.position_mm - b.position_mm);
                       const currentSortedIndex = sortedPositions.findIndex(el => el.id === elementId);
-                      if (currentSortedIndex > 0) {
+                      if (currentSortedIndex > 0 && !isNaN(sortedPositions[currentSortedIndex - 1].position_mm) && !isNaN(element.position_mm)) {
                           originalValue = element.position_mm - sortedPositions[currentSortedIndex - 1].position_mm;
                       } else {
-                          originalValue = null; // Cannot calculate for first element
+                          originalValue = null; 
                       }
                   } else {
                        originalValue = element.property?.[propertyName];
@@ -1207,9 +1225,8 @@
               const dummyInput = createTableInput('dummy', propertyName, originalValue, targetInputElement.step || 'any');
               targetInputElement.value = parseFloat(originalValue).toFixed(dummyInput.precision);
          } else if (propertyName === 'rel_pos_mm' && originalValue === null) {
-              targetInputElement.value = ''; // Clear relative position if it was the first element
+              targetInputElement.value = ''; 
          } else {
-              // Fallback if original value is unknown/invalid
               targetInputElement.value = '';
               console.warn(`Could not find original valid value for ${propertyName} of ${elementId} to reset input.`);
          }
@@ -1224,7 +1241,6 @@
         if (plotsInitialized.r && plotRDiv?.layout && typeof Plotly !== 'undefined') {
              try { Plotly.Plots.resize(plotRDiv); } catch (e) { console.warn("Could not resize Plot R:", e); }
         }
-        // Let CanvasController handle its own resize internally based on container
         if (typeof CanvasController !== 'undefined' && CanvasController.handleResize) {
             CanvasController.handleResize();
         }
@@ -1251,7 +1267,6 @@
         importSetupBtn = document.getElementById('importSetupBtn');
         importSetupInput = document.getElementById('importSetupInput');
 
-        // Property Groups and Inputs (structured)
         propGroups = {
             lens: document.getElementById('props-lens'),
             mirror_spherical: document.getElementById('props-mirror_spherical'),
@@ -1267,47 +1282,37 @@
             A: document.getElementById('prop-A'), B: document.getElementById('prop-B'),
             C: document.getElementById('prop-C'), D: document.getElementById('prop-D'),
         };
-         // Basic check if essential elements were found
-         if (!elementTypeSelect || !addElementBtn || !opticsTableBody || !plotWDiv || !interactiveCanvasElement || !exportSetupBtn || !importSetupBtn || !importSetupInput) { // <-- Check new elements
+         if (!elementTypeSelect || !addElementBtn || !opticsTableBody || !plotWDiv || !interactiveCanvasElement || !exportSetupBtn || !importSetupBtn || !importSetupInput) { 
             console.error("FATAL: Could not find essential DOM elements. Aborting initialization.");
             alert("Error initializing the page. Some elements are missing. Check the console (F12).");
-            return false; // Indicate failure
+            return false; 
         }
-        return true; // Indicate success
+        return true; 
    }
 
    function setupEventListeners() {
-       // Add Element Controls
        if (elementTypeSelect) elementTypeSelect.addEventListener('change', handleElementTypeChange);
        if (addElementBtn) addElementBtn.addEventListener('click', handleAddElement);
 
-       // Plot Controls
        if (showElementsCheck) showElementsCheck.addEventListener('change', handlePlotOptionChange);
        if (showWaistsCheck) showWaistsCheck.addEventListener('change', handlePlotOptionChange);
 
-       // Export Buttons
        if (exportWBtn) exportWBtn.addEventListener('click', handleExportW);
        if (exportRBtn) exportRBtn.addEventListener('click', handleExportR);
-       if (exportSetupBtn) exportSetupBtn.addEventListener('click', handleExportSetup); // <-- ADDED
+       if (exportSetupBtn) exportSetupBtn.addEventListener('click', handleExportSetup); 
 
-       // Import Button and File Input
-       if (importSetupBtn) importSetupBtn.addEventListener('click', handleImportSetupTrigger); // <-- ADDED
-       if (importSetupInput) importSetupInput.addEventListener('change', handleImportSetupFileSelect); // <-- ADDED
+       if (importSetupBtn) importSetupBtn.addEventListener('click', handleImportSetupTrigger); 
+       if (importSetupInput) importSetupInput.addEventListener('change', handleImportSetupFileSelect); 
 
-       // Window Resize
        window.addEventListener('resize', handleResize);
-
-       // Note: Table edit listeners are added dynamically
    }
 
    function initialize() {
        console.log("Initializing Simulator...");
-       if (!initDOMReferences()) return; // Stop if critical elements are missing
+       if (!initDOMReferences()) return; 
 
-       // Set initial UI state for property inputs
        handleElementTypeChange();
 
-       // Initialize Canvas Controller (pass simulation update callback)
        if (typeof CanvasController !== 'undefined' && CanvasController.init) {
            CanvasController.init(interactiveCanvasElement, opticalElements, beamParams, runSimulation);
        } else {
@@ -1315,29 +1320,24 @@
            if(interactiveCanvasElement) interactiveCanvasElement.style.display = 'none';
        }
 
-       // Attach event listeners
        setupEventListeners();
 
-       // Run initial simulation
        try {
            runSimulation();
        } catch (e) {
            console.error("Error during initial simulation run:", e);
-           // Error handled within runSimulation/handleSimulationError
        }
 
-       // Trigger resize once after initial setup/render
        setTimeout(handleResize, 150);
        console.log("Initialization complete.");
    }
 
-   // --- Auto-run Initialization on DOM Ready ---
    if (document.readyState === 'loading') {
        document.addEventListener('DOMContentLoaded', initialize);
    } else {
        initialize();
    }
 
-})(); // End of IIFE
+})(); 
 
 // --- END OF FILE script.js ---
