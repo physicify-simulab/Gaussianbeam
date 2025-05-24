@@ -4,7 +4,7 @@ A web-based tool for simulating Gaussian beam propagation through optical system
 
 Its core feature is an **interactive canvas** allowing real-time visualization and direct manipulation (drag) of optical elements, offering immediate feedback on system adjustments.
 
-➡️ **[Live Demo](/Gaussianbeam/)** ⬅️
+➡️ **[Live Demo](https://physicify-simulab.github.io/Gaussianbeam/)** ⬅️
 
 ---
 
