@@ -199,18 +199,7 @@
 
   <script src="script.js"></script>
   <script src="interactiveCanvas.js"></script>
-  <script>
-    // Simple function to fetch and insert external HTML snippets
-    function includeHTML(elementId, filePath) {
-      fetch(filePath)
-        .then(response => response.text())
-        .then(data => {
-          document.getElementById(elementId).innerHTML = data;
-        })
-        .catch(error => console.error('Error loading ' + filePath, error));
-    }
-    includeHTML('header-placeholder', '/header.html'); // This will now load the simplified header
-    includeHTML('footer-placeholder', '/footer.html');
-  </script>
+  <!-- Script to include Header/Footer -->
+  <script src="/layout.js" defer></script>
 </body>
 </html>
